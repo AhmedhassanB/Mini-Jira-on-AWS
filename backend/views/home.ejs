@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Jira Cognito Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, #eef2ff, #fdf2f8, #fefce8);
+      }
+      .card {
+        background: white;
+        border-radius: 16px;
+        padding: 28px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12);
+        width: min(560px, calc(100vw - 32px));
+      }
+      .btn {
+        display: inline-block;
+        margin-right: 12px;
+        margin-top: 12px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: white;
+        background: #2563eb;
+      }
+      .btn.secondary {
+        background: #111827;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #f3f4f6;
+        padding: 12px;
+        border-radius: 12px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Mini Jira Cognito Demo</h1>
+      <% if (isAuthenticated) { %>
+        <p>You are signed in with Cognito.</p>
+        <p><strong>User info:</strong></p>
+        <pre><%= JSON.stringify(userInfo, null, 2) %></pre>
+        <a class="btn secondary" href="/oidc/logout">Logout</a>
+      <% } else { %>
+        <p>You are not signed in.</p>
+        <a class="btn" href="/oidc/login">Login with Cognito</a>
+      <% } %>
+    </div>
+  </body>
+  </html>
