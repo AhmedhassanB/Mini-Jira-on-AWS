@@ -1,20 +1,40 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
+import session from "express-session";
 
+import authRoute from "./routes/auth.js";
+import oidcRoute from "./routes/oidc.js";
 import tasksRoute from "./routes/tasks.js";
-
-dotenv.config();
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "mini-jira-dev-session-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+    },
+  })
+);
 
+app.set("view engine", "ejs");
+
+app.use("/auth", authRoute);
+app.use("/oidc", oidcRoute);
 app.use("/tasks", tasksRoute);
 
 app.get("/", (req, res) => {
-  res.send("Backend Running");
+  res.render("home", {
+    isAuthenticated: Boolean(req.session?.userInfo),
+    userInfo: req.session?.userInfo || null,
+  });
 });
 
 const PORT = 3000;
