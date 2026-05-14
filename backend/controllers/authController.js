@@ -8,6 +8,8 @@ import {
   InitiateAuthCommand,
   GetUserCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import dynamoDB from "../config/dynamodb.js";
 
 const region = process.env.AWS_REGION || "us-east-1";
 const userPoolId = (process.env.COGNITO_USER_POOL_ID || "").trim();
@@ -15,6 +17,7 @@ const clientId = (process.env.COGNITO_CLIENT_ID || "").trim();
 const clientSecret = (process.env.COGNITO_CLIENT_SECRET || "").trim();
 
 const cognito = new CognitoIdentityProviderClient({ region });
+const usersTableName = process.env.USERS_TABLE_NAME || "Users";
 
 function secretHash(username) {
   if (!clientSecret) return undefined;
@@ -24,8 +27,8 @@ function secretHash(username) {
     .digest("base64");
 }
 
-function pickLoginName(body) {
-  return body.username || body.email || "";
+function pickEmail(body) {
+  return body.email || "";
 }
 
 function requireConfig(res) {
@@ -43,30 +46,41 @@ export async function signup(req, res) {
   try {
     if (!requireConfig(res)) return;
 
-    const username = pickLoginName(req.body);
-    const { email = username, password, role = "Employee", teamId = "" } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: "username/email and password are required" });
+    const appUsername = (req.body.username || "").trim();
+    const email = pickEmail(req.body).trim();
+    const { password, role = "Employee", teamId = "" } = req.body;
+    if (!appUsername || !email || !password) {
+      return res.status(400).json({ error: "username, email and password are required" });
     }
 
-    const userAttributes = [
-      { Name: "email", Value: email },
-      { Name: "custom:role", Value: role },
-    ];
-
-    if (teamId) {
-      userAttributes.push({ Name: "custom:teamId", Value: teamId });
-    }
+    const userAttributes = [{ Name: "email", Value: email }];
 
     const cmd = new SignUpCommand({
       ClientId: clientId,
-      Username: username,
+      Username: email,
       Password: password,
-      SecretHash: secretHash(username),
+      SecretHash: secretHash(email),
       UserAttributes: userAttributes,
     });
 
     const out = await cognito.send(cmd);
+
+    const createdAt = new Date().toISOString();
+    await dynamoDB.send(
+      new PutCommand({
+        TableName: usersTableName,
+        Item: {
+          userId: out.UserSub,
+          username: appUsername,
+          email,
+          role,
+          teamId: teamId || null,
+          cognitoSub: out.UserSub,
+          createdAt,
+        },
+      })
+    );
+
     return res.status(201).json({
       message: "Signup successful",
       userSub: out.UserSub,
@@ -83,17 +97,17 @@ export async function confirmSignup(req, res) {
   try {
     if (!requireConfig(res)) return;
 
-    const username = pickLoginName(req.body);
+    const email = pickEmail(req.body).trim();
     const confirmationCode = req.body.confirmationCode || req.body.code || "";
-    if (!username || !confirmationCode) {
-      return res.status(400).json({ error: "username/email and confirmationCode/code are required" });
+    if (!email || !confirmationCode) {
+      return res.status(400).json({ error: "email and confirmationCode/code are required" });
     }
 
     const cmd = new ConfirmSignUpCommand({
       ClientId: clientId,
-      Username: username,
+      Username: email,
       ConfirmationCode: confirmationCode,
-      SecretHash: secretHash(username),
+      SecretHash: secretHash(email),
     });
 
     await cognito.send(cmd);
@@ -108,19 +122,19 @@ export async function login(req, res) {
   try {
     if (!requireConfig(res)) return;
 
-    const username = pickLoginName(req.body);
+    const email = pickEmail(req.body).trim();
     const { password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: "username/email and password are required" });
+    if (!email || !password) {
+      return res.status(400).json({ error: "email and password are required" });
     }
 
     const cmd = new InitiateAuthCommand({
       AuthFlow: "USER_PASSWORD_AUTH",
       ClientId: clientId,
       AuthParameters: {
-        USERNAME: username,
+        USERNAME: email,
         PASSWORD: password,
-        ...(clientSecret ? { SECRET_HASH: secretHash(username) } : {}),
+        ...(clientSecret ? { SECRET_HASH: secretHash(email) } : {}),
       },
     });
 
