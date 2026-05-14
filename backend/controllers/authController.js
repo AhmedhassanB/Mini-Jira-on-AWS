@@ -7,6 +7,7 @@ import {
   ConfirmSignUpCommand,
   InitiateAuthCommand,
   GetUserCommand,
+  AdminGetUserCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import dynamoDB from "../config/dynamodb.js";
@@ -18,6 +19,29 @@ const clientSecret = (process.env.COGNITO_CLIENT_SECRET || "").trim();
 
 const cognito = new CognitoIdentityProviderClient({ region });
 const usersTableName = process.env.USERS_TABLE_NAME || "Users";
+
+async function upsertUserProfile({ userSub, username, email, role, teamId }) {
+  const createdAt = new Date().toISOString();
+  const item = {
+    userId: userSub,
+    username,
+    email,
+    role,
+    cognitoSub: userSub,
+    createdAt,
+  };
+
+  if (teamId) {
+    item.teamId = teamId;
+  }
+
+  await dynamoDB.send(
+    new PutCommand({
+      TableName: usersTableName,
+      Item: item,
+    })
+  );
+}
 
 function secretHash(username) {
   if (!clientSecret) return undefined;
@@ -63,23 +87,29 @@ export async function signup(req, res) {
       UserAttributes: userAttributes,
     });
 
-    const out = await cognito.send(cmd);
+    let out;
+    try {
+      out = await cognito.send(cmd);
+    } catch (error) {
+      if (error?.name !== "UsernameExistsException") {
+        throw error;
+      }
 
-    const createdAt = new Date().toISOString();
-    await dynamoDB.send(
-      new PutCommand({
-        TableName: usersTableName,
-        Item: {
-          userId: out.UserSub,
-          username: appUsername,
-          email,
-          role,
-          teamId: teamId || null,
-          cognitoSub: out.UserSub,
-          createdAt,
-        },
-      })
-    );
+      // Cognito user already exists; fetch the sub and ensure DynamoDB has the app profile.
+      const existing = await cognito.send(new AdminGetUserCommand({ UserPoolId: userPoolId, Username: email }));
+      const attrs = Object.fromEntries((existing.UserAttributes || []).map((a) => [a.Name, a.Value]));
+      const userSub = attrs.sub || existing.Username || email;
+      await upsertUserProfile({ userSub, username: appUsername, email, role, teamId });
+
+      return res.status(200).json({
+        message: "User already existed in Cognito; DynamoDB profile saved",
+        userSub,
+        userConfirmed: true,
+        codeDeliveryDetails: null,
+      });
+    }
+
+    await upsertUserProfile({ userSub: out.UserSub, username: appUsername, email, role, teamId });
 
     return res.status(201).json({
       message: "Signup successful",
