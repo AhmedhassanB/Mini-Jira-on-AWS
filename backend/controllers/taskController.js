@@ -148,7 +148,7 @@ export const deleteTask = async (req, res) => {
   }
 };
 
-// UPDATE TASK STATUS
+// UPDATE TASK STATUS — kept for backward compatibility with existing routes
 export const updateTaskStatus = async (req, res) => {
   try {
     await dynamoDB.send(
@@ -183,17 +183,69 @@ export const updateTaskStatus = async (req, res) => {
   }
 };
 
-// GET TASKS BY TEAM
+// UPDATE TASK — dynamically builds SET expression for only supplied fields
+export const updateTask = async (req, res) => {
+  try {
+    const updatable = [
+      "title",
+      "description",
+      "status",
+      "priority",
+      "teamId",
+      "assigneeId",
+      "deadline",
+      "projectId",
+      "imageUrl",
+      "thumbnailUrl",
+    ];
+
+    const updates = [];
+    const ExpressionAttributeNames = {};
+    const ExpressionAttributeValues = {};
+
+    updatable.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates.push(`#${field} = :${field}`);
+        ExpressionAttributeNames[`#${field}`] = field;
+        ExpressionAttributeValues[`:${field}`] = req.body[field];
+      }
+    });
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    // Track when the record was last modified
+    updates.push("#updatedAt = :updatedAt");
+    ExpressionAttributeNames["#updatedAt"] = "updatedAt";
+    ExpressionAttributeValues[":updatedAt"] = new Date().toISOString();
+
+    const data = await dynamoDB.send(
+      new UpdateCommand({
+        TableName: "Tasks",
+        Key: { taskId: req.params.id },
+        UpdateExpression: `SET ${updates.join(", ")}`,
+        ExpressionAttributeNames,
+        ExpressionAttributeValues,
+        ReturnValues: "ALL_NEW",
+      }),
+    );
+
+    res.json(data.Attributes);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// GET TASKS BY TEAM — queries GSI teamId-index, sorted by createdAt
 export const getTasksByTeam = async (req, res) => {
   try {
     const data = await dynamoDB.send(
       new QueryCommand({
         TableName: "Tasks",
-
         IndexName: "teamId-index",
-
         KeyConditionExpression: "teamId = :teamId",
-
         ExpressionAttributeValues: {
           ":teamId": req.params.teamId,
         },
@@ -203,9 +255,48 @@ export const getTasksByTeam = async (req, res) => {
     res.json(data.Items);
   } catch (error) {
     console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    res.status(500).json({
-      error: error.message,
-    });
+// GET TASKS BY ASSIGNEE — queries GSI assigneeId-index
+export const getTasksByAssignee = async (req, res) => {
+  try {
+    const data = await dynamoDB.send(
+      new QueryCommand({
+        TableName: "Tasks",
+        IndexName: "assigneeId-index",
+        KeyConditionExpression: "assigneeId = :assigneeId",
+        ExpressionAttributeValues: {
+          ":assigneeId": req.params.assigneeId,
+        },
+      }),
+    );
+
+    res.json(data.Items);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// GET TASKS BY PROJECT — queries GSI projectId-index
+export const getTasksByProject = async (req, res) => {
+  try {
+    const data = await dynamoDB.send(
+      new QueryCommand({
+        TableName: "Tasks",
+        IndexName: "projectId-index",
+        KeyConditionExpression: "projectId = :projectId",
+        ExpressionAttributeValues: {
+          ":projectId": req.params.projectId,
+        },
+      }),
+    );
+
+    res.json(data.Items);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: error.message });
   }
 };
