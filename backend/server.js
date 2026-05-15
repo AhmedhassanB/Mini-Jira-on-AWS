@@ -5,7 +5,9 @@ import session from "express-session";
 
 import authRoute from "./routes/auth.js";
 import oidcRoute from "./routes/oidc.js";
-import tasksRoute from "./routes/tasks.js";
+import taskRoutes from "./routes/taskRoutes.js";
+import projectRoutes from "./routes/projectRoutes.js";
+import teamRoutes from "./routes/teamRoutes.js";
 
 const app = express();
 
@@ -21,14 +23,16 @@ app.use(
       sameSite: "lax",
       secure: false,
     },
-  })
+  }),
 );
 
 app.set("view engine", "ejs");
 
 app.use("/auth", authRoute);
 app.use("/oidc", oidcRoute);
-app.use("/tasks", tasksRoute);
+app.use("/api/tasks", taskRoutes);
+app.use("/api/projects", projectRoutes);
+app.use("/api/teams", teamRoutes);
 
 app.get("/", (req, res) => {
   res.render("home", {
