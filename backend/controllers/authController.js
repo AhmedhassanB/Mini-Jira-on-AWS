@@ -5,11 +5,12 @@ import {
   CognitoIdentityProviderClient,
   SignUpCommand,
   ConfirmSignUpCommand,
+  ResendConfirmationCodeCommand,
   InitiateAuthCommand,
   GetUserCommand,
   AdminGetUserCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
-import { PutCommand } from "@aws-sdk/lib-dynamodb";
+import { PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import dynamoDB from "../config/dynamodb.js";
 
 const region = process.env.AWS_REGION || "us-east-1";
@@ -148,6 +149,30 @@ export async function confirmSignup(req, res) {
   }
 }
 
+export async function resendCode(req, res) {
+  try {
+    if (!requireConfig(res)) return;
+
+    const email = pickEmail(req.body).trim();
+    if (!email) {
+      return res.status(400).json({ error: "email is required" });
+    }
+
+    await cognito.send(
+      new ResendConfirmationCodeCommand({
+        ClientId: clientId,
+        Username: email,
+        SecretHash: secretHash(email),
+      })
+    );
+
+    return res.json({ message: "Confirmation code resent" });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: error.name || "Resend failed", details: error.message });
+  }
+}
+
 export async function login(req, res) {
   try {
     if (!requireConfig(res)) return;
@@ -169,13 +194,32 @@ export async function login(req, res) {
     });
 
     const out = await cognito.send(cmd);
+    const accessToken = out.AuthenticationResult?.AccessToken;
+
+    // Fetch DynamoDB profile so the frontend gets role, username, teamId, etc.
+    let userProfile = null;
+    if (accessToken) {
+      try {
+        const cognitoUser = await cognito.send(new GetUserCommand({ AccessToken: accessToken }));
+        const attrs = Object.fromEntries((cognitoUser.UserAttributes || []).map((a) => [a.Name, a.Value]));
+        const sub = attrs.sub;
+        if (sub) {
+          const result = await dynamoDB.send(new GetCommand({ TableName: usersTableName, Key: { userId: sub } }));
+          userProfile = result.Item || null;
+        }
+      } catch {
+        // Non-fatal: return tokens even if profile fetch fails
+      }
+    }
+
     return res.json({
       message: "Login successful",
-      accessToken: out.AuthenticationResult?.AccessToken || null,
+      accessToken: accessToken || null,
       idToken: out.AuthenticationResult?.IdToken || null,
       refreshToken: out.AuthenticationResult?.RefreshToken || null,
       expiresIn: out.AuthenticationResult?.ExpiresIn || null,
       tokenType: out.AuthenticationResult?.TokenType || null,
+      user: userProfile,
     });
   } catch (error) {
     console.log(error);
@@ -193,12 +237,20 @@ export async function me(req, res) {
     }
 
     const token = auth.split(" ")[1];
-    const user = await cognito.send(new GetUserCommand({ AccessToken: token }));
+    const cognitoUser = await cognito.send(new GetUserCommand({ AccessToken: token }));
 
-    const attrs = Object.fromEntries((user.UserAttributes || []).map((a) => [a.Name, a.Value]));
+    const attrs = Object.fromEntries((cognitoUser.UserAttributes || []).map((a) => [a.Name, a.Value]));
+    const sub = attrs.sub;
+
+    let userProfile = null;
+    if (sub) {
+      const result = await dynamoDB.send(new GetCommand({ TableName: usersTableName, Key: { userId: sub } }));
+      userProfile = result.Item || null;
+    }
 
     return res.json({
-      username: user.Username,
+      ...(userProfile || {}),
+      cognitoUsername: cognitoUser.Username,
       userAttributes: attrs,
     });
   } catch (error) {
