@@ -4,16 +4,27 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "create-tables": "node scripts/create-tables.js",
+    "seed": "node scripts/seed-data.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1045.0",
+    "@aws-sdk/client-dynamodb": "^3.1045.0",
+    "@aws-sdk/lib-dynamodb": "^3.1045.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "ejs": "^3.1.10",
     "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "joi": "^18.2.1",
+    "jsonwebtoken": "^9.0.0",
+    "jwks-rsa": "^2.0.5",
+    "openid-client": "^5.7.1",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
