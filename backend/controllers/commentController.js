@@ -9,20 +9,29 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 import dynamoDB from "../config/dynamodb.js";
 import commentSchema from "../models/commentSchema.js";
-import { UsernameAttributeType } from "@aws-sdk/client-cognito-identity-provider";
 
 const commentsTableName = process.env.COMMENTS_TABLE_NAME || "Comments";
+
+// Helper to get user info from token OR request body (for testing)
+const getAuthor = (req) => {
+  const authorId = req.user?.userId || req.user?.sub || req.body.authorId || "anonymous";
+  const authorName = req.user?.username || req.user?.["cognito:username"] || req.body.authorName || "Anonymous";
+  
+  return { authorId, authorName };
+};
 
 // CREATE COMMENT
 export const createComment = async (req, res) => {
   try {
-    const { taskId, text, attachments } = req.body;
-    const authorId = req.user?.userId || req.user?.sub || req.body.authorId;
-    const authorName = req.user?.username || req.body.authorName;
+    const { id } = req.params; // Expecting /tasks/:id/comments
+    const taskId = id ; 
+    const { text, attachments } = req.body;
 
-    if (!taskId || !text || !authorId || !authorName) {
+    const auth = getAuthor(req);
+
+    if (!taskId || !text) {
       return res.status(400).json({
-        error: "taskId, text, authorId, and authorName are required",
+        error: "taskId and text are required fields",
       });
     }
 
@@ -32,14 +41,13 @@ export const createComment = async (req, res) => {
     const comment = {
       commentId,
       taskId,
-      authorId,
-      authorName,
+      authorId: auth.authorId,
+      authorName: auth.authorName ,
       text,
       attachments: attachments || [],
       createdAt,
     };
 
-    // Validate comment data
     const { error, value } = commentSchema.validate(comment);
     if (error) {
       return res.status(400).json({
@@ -72,7 +80,6 @@ export const createComment = async (req, res) => {
 export const getCommentsByTask = async (req, res) => {
   try {
     const { id } = req.params;
-
     const taskId = id;
     if (!taskId) {
       return res.status(400).json({
@@ -86,7 +93,7 @@ export const getCommentsByTask = async (req, res) => {
       ExpressionAttributeValues: {
         ":taskId": taskId,
       },
-      ScanIndexForward: false, // Sort by createdAt descending (most recent first)
+      ScanIndexForward: false, 
     });
 
     const result = await dynamoDB.send(cmd);
@@ -109,7 +116,8 @@ export const getCommentsByTask = async (req, res) => {
 export const getComment = async (req, res) => {
   try {
     const { commentId, id } = req.params;
-const taskId = id; // Since the route is /:id/comments/:commentId, we treat :id as taskId
+    const taskId = id;
+
     if (!commentId || !taskId) {
       return res.status(400).json({
         error: "commentId and taskId are required",
@@ -118,10 +126,7 @@ const taskId = id; // Since the route is /:id/comments/:commentId, we treat :id 
 
     const cmd = new GetCommand({
       TableName: commentsTableName,
-      Key: {
-        taskId,
-        commentId,
-      },
+      Key: { taskId, commentId },
     });
 
     const result = await dynamoDB.send(cmd);
@@ -149,9 +154,10 @@ const taskId = id; // Since the route is /:id/comments/:commentId, we treat :id 
 export const updateComment = async (req, res) => {
   try {
     const { commentId, id } = req.params;
-    const taskId = id; // Since the route is /:id/comments/:commentId, we treat :id as taskId
+    const taskId = id;
     const { text, attachments } = req.body;
-    const authorId = req.user?.userId;
+
+    const auth = getAuthor(req);
 
     if (!commentId || !taskId) {
       return res.status(400).json({
@@ -165,13 +171,9 @@ export const updateComment = async (req, res) => {
       });
     }
 
-    // Get the comment to verify ownership
     const getCmd = new GetCommand({
       TableName: commentsTableName,
-      Key: {
-        taskId,
-        commentId,
-      },
+      Key: { taskId, commentId },
     });
 
     const getResult = await dynamoDB.send(getCmd);
@@ -182,22 +184,18 @@ export const updateComment = async (req, res) => {
       });
     }
 
-    // Check if the user is the comment author
-    if (authorId && getResult.Item.authorId !== authorId) {
+    // Verify ownership strictly
+    if (getResult.Item.authorId !== auth.authorId) {
       return res.status(403).json({
-        error: "Unauthorized",
+        error: "Forbidden",
         details: "You can only update your own comments",
       });
     }
 
     const updatedAt = new Date().toISOString();
     const updateExpressions = ["#updatedAt = :updatedAt"];
-    const expressionAttributeNames = {
-      "#updatedAt": "updatedAt",
-    };
-    const expressionAttributeValues = {
-      ":updatedAt": updatedAt,
-    };
+    const expressionAttributeNames = { "#updatedAt": "updatedAt" };
+    const expressionAttributeValues = { ":updatedAt": updatedAt };
 
     if (text) {
       updateExpressions.push("#text = :text");
@@ -213,11 +211,8 @@ export const updateComment = async (req, res) => {
 
     const updateCmd = new UpdateCommand({
       TableName: commentsTableName,
-      Key: {
-        taskId,
-        commentId,
-      },
-      UpdateExpression: updateExpressions.join(", "),
+      Key: { taskId, commentId },
+      UpdateExpression: "SET " + updateExpressions.join(", "),
       ExpressionAttributeNames: expressionAttributeNames,
       ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: "ALL_NEW",
@@ -242,21 +237,19 @@ export const updateComment = async (req, res) => {
 export const deleteComment = async (req, res) => {
   try {
     const { commentId, id } = req.params;
-    const authorId = req.user?.userId;
-    const taskId = id; // Since the route is /:id/comments/:commentId, we treat :id as taskId
+    const taskId = id;
+
+    const auth = getAuthor(req);
+
     if (!commentId || !taskId) {
       return res.status(400).json({
         error: "commentId and taskId are required",
       });
     }
 
-    // Get the comment to verify ownership
     const getCmd = new GetCommand({
       TableName: commentsTableName,
-      Key: {
-        taskId,
-        commentId,
-      },
+      Key: { taskId, commentId },
     });
 
     const getResult = await dynamoDB.send(getCmd);
@@ -267,23 +260,20 @@ export const deleteComment = async (req, res) => {
       });
     }
 
-    // Check if the user is the comment author
-    if (authorId && getResult.Item.authorId !== authorId) {
+    // Verify ownership strictly
+    if (getResult.Item.authorId !== auth.authorId) {
       return res.status(403).json({
-        error: "Unauthorized",
+        error: "Forbidden",
         details: "You can only delete your own comments",
       });
     }
 
-    const deleteCmd = new DeleteCommand({
-      TableName: commentsTableName,
-      Key: {
-        taskId,
-        commentId,
-      },
-    });
-
-    await dynamoDB.send(deleteCmd);
+    await dynamoDB.send(
+      new DeleteCommand({
+        TableName: commentsTableName,
+        Key: { taskId, commentId },
+      })
+    );
 
     return res.json({
       message: "Comment deleted successfully",
