@@ -6,8 +6,8 @@ import {
   SignUpCommand,
   ConfirmSignUpCommand,
   InitiateAuthCommand,
-  GetUserCommand,
   AdminGetUserCommand,
+  UpdateUserAttributesCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import dynamoDB from "../config/dynamodb.js";
@@ -77,7 +77,10 @@ export async function signup(req, res) {
       return res.status(400).json({ error: "username, email and password are required" });
     }
 
-    const userAttributes = [{ Name: "email", Value: email }];
+    const userAttributes = [
+      { Name: "email", Value: email },
+      { Name: "name", Value: appUsername },
+    ];
 
     const cmd = new SignUpCommand({
       ClientId: clientId,
@@ -185,25 +188,57 @@ export async function login(req, res) {
 
 export async function me(req, res) {
   try {
-    if (!requireConfig(res)) return;
-
-    const auth = req.headers.authorization || req.headers.Authorization;
-    if (!auth || !auth.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Missing Bearer token" });
-    }
-
-    const token = auth.split(" ")[1];
-    const user = await cognito.send(new GetUserCommand({ AccessToken: token }));
-
-    const attrs = Object.fromEntries((user.UserAttributes || []).map((a) => [a.Name, a.Value]));
+    // req.user is already populated by authMiddleware (JWT-verified + DynamoDB-enriched)
+    const { sub, role, teamId, dbProfile, claims } = req.user;
 
     return res.json({
-      username: user.Username,
-      userAttributes: attrs,
+      username: sub,           // Cognito internal id — clients must not display this
+      userAttributes: {
+        sub,
+        email: dbProfile?.email || claims?.email || "",
+        name: dbProfile?.username || dbProfile?.name || "",
+      },
+      // profile is the definitive user record from DynamoDB
+      profile: {
+        name: dbProfile?.username || dbProfile?.name || null,
+        email: dbProfile?.email || null,
+        role: role || null,
+        teamId: teamId || null,
+      },
     });
   } catch (error) {
     console.log(error);
     return res.status(401).json({ error: error.name || "Failed to get user", details: error.message });
+  }
+}
+
+export async function updateProfile(req, res) {
+  try {
+    if (!requireConfig(res)) return;
+
+    const auth = req.headers.authorization || req.headers.Authorization || "";
+    if (!auth.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Missing Bearer token" });
+    }
+
+    const token = auth.split(" ")[1];
+    const name = (req.body.name || "").trim();
+
+    if (!name) {
+      return res.status(400).json({ error: "name is required" });
+    }
+
+    await cognito.send(
+      new UpdateUserAttributesCommand({
+        AccessToken: token,
+        UserAttributes: [{ Name: "name", Value: name }],
+      })
+    );
+
+    return res.json({ message: "Profile updated", name });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ error: error.name || "Update failed", details: error.message });
   }
 }
 
