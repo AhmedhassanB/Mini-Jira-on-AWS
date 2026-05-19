@@ -141,7 +141,7 @@ export const getProjectsByTeam = async (req, res) => {
     const data = await dynamoDB.send(
       new QueryCommand({
         TableName: "Projects",
-        IndexName: "teamId-index",
+        IndexName: "GSI_teamId",
         KeyConditionExpression: "teamId = :teamId",
         ExpressionAttributeValues: {
           ":teamId": req.params.teamId,
