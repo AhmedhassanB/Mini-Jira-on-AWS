@@ -29,6 +29,7 @@ function parseMeResponse(me, fallbackClaims = {}) {
   const name =
     db.name ||
     attrs.name ||
+    fallbackClaims.name ||
     (emailLocal ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1) : 'User')
 
   return {
@@ -55,21 +56,25 @@ export function useLogin() {
         return
       }
 
-      const claims = decodeJwtPayload(token)
+      // ID token contains user attributes (name, email); access token does not
+      const idClaims = data?.idToken ? decodeJwtPayload(data.idToken) : {}
+      const claims = { ...idClaims, ...decodeJwtPayload(token) }
+
+      const idToken = data?.idToken || null
 
       try {
         // Pre-set token so /auth/me request includes Authorization header
         useAuthStore.setState({ token })
         const me = await authService.me()
         const user = parseMeResponse(me, claims)
-        setAuth(user, token)
+        setAuth(user, token, idToken)
         queryClient.clear()
         navigate('/')
         toast.success(`Welcome back, ${user.name || user.email}!`)
       } catch {
         // /auth/me failed — fall back to JWT claims so login still works
         const user = parseMeResponse({}, claims)
-        setAuth(user, token)
+        setAuth(user, token, idToken)
         queryClient.clear()
         navigate('/')
         toast.success('Welcome back!')
@@ -137,12 +142,15 @@ export function useMe() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const updateUser = useAuthStore((s) => s.updateUser)
   const token = useAuthStore((s) => s.token)
+  const idToken = useAuthStore((s) => s.idToken)
 
   return useQuery({
     queryKey: ['me'],
     queryFn: async () => {
       const me = await authService.me()
-      const claims = token ? decodeJwtPayload(token) : {}
+      // ID token has email + name; access token does not — merge both as fallback
+      const idClaims = idToken ? decodeJwtPayload(idToken) : {}
+      const claims = { ...idClaims, ...(token ? decodeJwtPayload(token) : {}) }
       const user = parseMeResponse(me, claims)
       updateUser(user)
       return user

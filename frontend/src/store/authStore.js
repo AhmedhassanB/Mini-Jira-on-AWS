@@ -6,13 +6,19 @@ export const useAuthStore = create(
     (set, get) => ({
       user: null,
       token: null,
+      idToken: null,
       isAuthenticated: false,
       theme: 'dark',
 
-      setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
-      logout: () => set({ user: null, token: null, isAuthenticated: false }),
+      setAuth: (user, token, idToken = null) => set({ user, token, idToken, isAuthenticated: true }),
+      logout: () => set({ user: null, token: null, idToken: null, isAuthenticated: false }),
       updateUser: (updates) =>
-        set((state) => ({ user: { ...state.user, ...updates } })),
+        set((state) => ({
+          user: {
+            ...state.user,
+            ...Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== '' && v != null)),
+          },
+        })),
       toggleTheme: () =>
         set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
     }),
@@ -22,6 +28,7 @@ export const useAuthStore = create(
       partialize: (state) => ({
         user: state.user,
         token: state.token,
+        idToken: state.idToken,
         isAuthenticated: state.isAuthenticated,
         theme: state.theme,
       }),
