@@ -50,7 +50,7 @@ export function useUpdateTask() {
     },
     onError: (err, _, ctx) => {
       ctx?.snapshot?.forEach(([key, val]) => qc.setQueryData(key, val))
-      toast.error(err?.message || 'Failed to update task')
+      toast.error(err?.error || err?.details || err?.message || 'Failed to update task')
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['tasks'] }),
   })
