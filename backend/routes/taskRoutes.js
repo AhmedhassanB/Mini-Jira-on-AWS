@@ -35,8 +35,8 @@ router.put("/:id", updateTask);
 router.delete("/:id", deleteTask);
 
 // Comment routes require authentication
-router.post("/:id/comments", createComment);
+router.post("/:id/comments", authMiddleware, createComment);
 router.get("/:id/comments", getCommentsByTask);
-router.put('/:id/comments/:commentId', updateComment);
-router.delete('/:id/comments/:commentId', deleteComment);
+router.put('/:id/comments/:commentId', authMiddleware, updateComment);
+router.delete('/:id/comments/:commentId', authMiddleware, deleteComment);
 export default router;

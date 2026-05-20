@@ -22,6 +22,18 @@ export function useCreateComment(taskId) {
   })
 }
 
+export function useUpdateComment(taskId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ commentId, text }) => commentService.update(taskId, commentId, { text }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comments', taskId] })
+      toast.success('Comment updated')
+    },
+    onError: (err) => toast.error(err?.message || 'Failed to update comment'),
+  })
+}
+
 export function useDeleteComment(taskId) {
   const qc = useQueryClient()
   return useMutation({

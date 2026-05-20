@@ -48,10 +48,10 @@ export default function Dashboard() {
   if (isLoading) return <DashboardSkeleton />
 
   const totalTasks = tasks.length
-  const inProgress = tasks.filter((t) => t.status === 'in-progress').length
-  const done = tasks.filter((t) => t.status === 'done').length
-  const overdueTasks = tasks.filter((t) => isOverdue(t.deadline) && t.status !== 'done')
-  const dueTodayTasks = tasks.filter((t) => isDueToday(t.deadline) && t.status !== 'done')
+  const inProgress = tasks.filter((t) => t.status === 'In Progress').length
+  const done = tasks.filter((t) => t.status === 'Done').length
+  const overdueTasks = tasks.filter((t) => isOverdue(t.deadline) && t.status !== 'Done')
+  const dueTodayTasks = tasks.filter((t) => isDueToday(t.deadline) && t.status !== 'Done')
   const completionRate = totalTasks ? Math.round((done / totalTasks) * 100) : 0
 
   const recentTasks = [...tasks]

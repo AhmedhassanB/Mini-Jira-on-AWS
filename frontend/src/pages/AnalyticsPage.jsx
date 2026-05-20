@@ -38,9 +38,9 @@ export default function AnalyticsPage() {
 
   const stats = useMemo(() => {
     const total = tasks.length
-    const done = tasks.filter((t) => t.status === 'done').length
-    const overdue = tasks.filter((t) => isOverdue(t.deadline) && t.status !== 'done').length
-    const inProgress = tasks.filter((t) => t.status === 'in-progress').length
+    const done = tasks.filter((t) => t.status === 'Done').length
+    const overdue = tasks.filter((t) => isOverdue(t.deadline) && t.status !== 'Done').length
+    const inProgress = tasks.filter((t) => t.status === 'In Progress').length
     const rate = total ? Math.round((done / total) * 100) : 0
     return { total, done, overdue, inProgress, rate }
   }, [tasks])

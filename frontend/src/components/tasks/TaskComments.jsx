@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Trash2, Send } from 'lucide-react'
-import { useComments, useCreateComment, useDeleteComment } from '@/hooks/useComments'
+import { Trash2, Send, Pencil, Check, X } from 'lucide-react'
+import { useComments, useCreateComment, useUpdateComment, useDeleteComment } from '@/hooks/useComments'
 import { useAuthStore } from '@/store/authStore'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,15 +10,36 @@ import { timeAgo, getInitials } from '@/utils/helpers'
 
 export default function TaskComments({ taskId }) {
   const [text, setText] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editText, setEditText] = useState('')
   const { user } = useAuthStore()
   const { data: comments = [], isLoading } = useComments(taskId)
   const createComment = useCreateComment(taskId)
+  const updateComment = useUpdateComment(taskId)
   const deleteComment = useDeleteComment(taskId)
 
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!text.trim()) return
     createComment.mutate({ text: text.trim() }, { onSuccess: () => setText('') })
+  }
+
+  const startEdit = (comment) => {
+    setEditingId(comment.commentId)
+    setEditText(comment.text)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditText('')
+  }
+
+  const submitEdit = (commentId) => {
+    if (!editText.trim()) return
+    updateComment.mutate(
+      { commentId, text: editText.trim() },
+      { onSuccess: () => { setEditingId(null); setEditText('') } }
+    )
   }
 
   return (
@@ -84,17 +105,58 @@ export default function TaskComments({ taskId }) {
                     {timeAgo(comment.createdAt)}
                   </span>
                 </div>
-                <div className="bg-muted rounded-lg px-3 py-2 text-sm text-foreground">
-                  {comment.text}
-                </div>
+
+                {editingId === comment.commentId ? (
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="min-h-[36px] h-9 py-2 text-sm resize-none flex-1"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          submitEdit(comment.commentId)
+                        }
+                        if (e.key === 'Escape') cancelEdit()
+                      }}
+                    />
+                    <button
+                      onClick={() => submitEdit(comment.commentId)}
+                      disabled={!editText.trim() || updateComment.isPending}
+                      className="text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-muted rounded-lg px-3 py-2 text-sm text-foreground">
+                    {comment.text}
+                  </div>
+                )}
               </div>
-              {comment.authorId === user?.userId && (
-                <button
-                  onClick={() => deleteComment.mutate(comment.commentId)}
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all self-start mt-5"
-                >
-                  <Trash2 size={14} />
-                </button>
+
+              {comment.authorId === user?.userId && editingId !== comment.commentId && (
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all self-start mt-5">
+                  <button
+                    onClick={() => startEdit(comment)}
+                    className="text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    onClick={() => deleteComment.mutate(comment.commentId)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               )}
             </div>
           ))}

@@ -35,9 +35,6 @@ export function verifyAccessToken(token) {
 
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) return reject(err);
-      if (clientId && decoded.client_id !== clientId) {
-        return reject(new Error("Invalid client_id in access token"));
-      }
       resolve(decoded);
     });
   });

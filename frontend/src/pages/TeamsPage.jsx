@@ -63,8 +63,8 @@ function TeamModal({ open, onOpenChange, team }) {
 
 function TeamCard({ team, onEdit, onDelete }) {
   const { data: tasks = [] } = useTasks({ teamId: team.teamId })
-  const done = tasks.filter((t) => t.status === 'done').length
-  const inProgress = tasks.filter((t) => t.status === 'in-progress').length
+  const done = tasks.filter((t) => t.status === 'Done').length
+  const inProgress = tasks.filter((t) => t.status === 'In Progress').length
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

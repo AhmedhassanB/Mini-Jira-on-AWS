@@ -16,7 +16,7 @@ import { TASK_STATUSES, TASK_PRIORITIES } from '@/utils/constants'
 const DEFAULT_FORM = {
   title: '',
   description: '',
-  status: 'todo',
+  status: 'To Do',
   priority: 'medium',
   assignee: '',
   deadline: '',
@@ -30,13 +30,13 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
     task ? {
       title: task.title || '',
       description: task.description || '',
-      status: task.status || 'todo',
+      status: task.status || 'To Do',
       priority: task.priority || 'medium',
       assignee: task.assignee || '',
       deadline: task.deadline ? task.deadline.slice(0, 10) : '',
       teamId: task.teamId || '',
       projectId: task.projectId || '',
-    } : { ...DEFAULT_FORM, status: initialStatus || 'todo' }
+    } : { ...DEFAULT_FORM, status: initialStatus || 'To Do' }
   )
 
   const { data: teams = [] } = useTeams()

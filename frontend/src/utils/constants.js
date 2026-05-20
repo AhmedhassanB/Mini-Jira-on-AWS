@@ -1,8 +1,8 @@
 export const TASK_STATUSES = [
-  { id: 'todo', label: 'To Do', color: 'bg-slate-500', textColor: 'text-slate-500' },
-  { id: 'in-progress', label: 'In Progress', color: 'bg-blue-500', textColor: 'text-blue-500' },
-  { id: 'in-review', label: 'In Review', color: 'bg-amber-500', textColor: 'text-amber-500' },
-  { id: 'done', label: 'Done', color: 'bg-green-500', textColor: 'text-green-500' },
+  { id: 'To Do', label: 'To Do', color: 'bg-slate-500', textColor: 'text-slate-500' },
+  { id: 'In Progress', label: 'In Progress', color: 'bg-blue-500', textColor: 'text-blue-500' },
+  { id: 'In Review', label: 'In Review', color: 'bg-amber-500', textColor: 'text-amber-500' },
+  { id: 'Done', label: 'Done', color: 'bg-green-500', textColor: 'text-green-500' },
 ]
 
 export const TASK_PRIORITIES = [
@@ -19,17 +19,17 @@ export const USER_ROLES = [
 ]
 
 export const KANBAN_COLUMNS = [
-  { id: 'todo', title: 'To Do', dotColor: 'bg-slate-400' },
-  { id: 'in-progress', title: 'In Progress', dotColor: 'bg-blue-500' },
-  { id: 'in-review', title: 'In Review', dotColor: 'bg-amber-500' },
-  { id: 'done', title: 'Done', dotColor: 'bg-green-500' },
+  { id: 'To Do', title: 'To Do', dotColor: 'bg-slate-400' },
+  { id: 'In Progress', title: 'In Progress', dotColor: 'bg-blue-500' },
+  { id: 'In Review', title: 'In Review', dotColor: 'bg-amber-500' },
+  { id: 'Done', title: 'Done', dotColor: 'bg-green-500' },
 ]
 
 export const STATUS_BADGE_VARIANTS = {
-  'todo': 'secondary',
-  'in-progress': 'blue',
-  'in-review': 'warning',
-  'done': 'success',
+  'To Do': 'secondary',
+  'In Progress': 'blue',
+  'In Review': 'warning',
+  'Done': 'success',
 }
 
 export const PRIORITY_BADGE_VARIANTS = {

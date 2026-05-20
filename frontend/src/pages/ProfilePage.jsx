@@ -30,8 +30,8 @@ export default function ProfilePage() {
   )
 
   const myTasks = tasks.filter((t) => t.assigneeId === user?.userId || t.assignee === user?.email)
-  const completed = myTasks.filter((t) => t.status === 'done').length
-  const inProgress = myTasks.filter((t) => t.status === 'in-progress').length
+  const completed = myTasks.filter((t) => t.status === 'Done').length
+  const inProgress = myTasks.filter((t) => t.status === 'In Progress').length
 
   const handleSave = () => {
     if (!form.name.trim()) return
