@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Menu, Search, Bell, X } from 'lucide-react'
+import { Menu, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -9,6 +9,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import ThemeToggle from './ThemeToggle'
+import NotificationsPanel from './NotificationsPanel'
 import { useAuthStore } from '@/store/authStore'
 import { getInitials, displayName } from '@/utils/helpers'
 import { useTasks } from '@/hooks/useTasks'
@@ -113,10 +114,7 @@ export default function Navbar({ onMenuClick }) {
       <div className="flex items-center gap-1 ml-auto">
         <ThemeToggle />
 
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell size={18} />
-          <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-primary" />
-        </Button>
+        <NotificationsPanel />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
