@@ -1,4 +1,5 @@
 import dynamoDB from "../config/dynamodb.js";
+import sns from "../config/sns.js";
 
 import {
   PutCommand,
@@ -10,8 +11,11 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 
 import { ListTablesCommand } from "@aws-sdk/client-dynamodb";
+import { PublishCommand } from "@aws-sdk/client-sns";
 
 import { v4 as uuidv4 } from "uuid";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import s3 from "../config/s3.js";
 
 // TEST REGION
 export const testRegion = async (req, res) => {
@@ -38,31 +42,69 @@ export const getTables = async (req, res) => {
 // CREATE TASK
 export const createTask = async (req, res) => {
   try {
-    const task = {
-      taskId: uuidv4(),
+    console.log("createTask incoming body:", req.body);
+    console.log("createTask incoming files:", req.files);
+    const taskId = uuidv4();
 
-      title: req.body.title,
+    // If a file was uploaded via multipart/form-data (field 'file'), upload to S3 first
+    let imageUrl;
+    let thumbnailUrl;
 
-      description: req.body.description,
+    // Support multer.any (req.files as array); filter for actual files, move text fields to req.body
+    const uploadedFile = req.files?.find((f) => f.mimetype?.startsWith("image/"));
+    if (uploadedFile) {
+      const bucket = process.env.S3_BUCKET_ORIGINALS || process.env.S3_BUCKET_RESIZED || "";
+      if (!bucket) return res.status(500).json({ error: "S3 originals bucket not configured" });
 
-      status: req.body.status || "To Do",
+      const fileExt = uploadedFile.originalname && uploadedFile.originalname.includes(".") ? uploadedFile.originalname.split(".").pop() : "bin";
+      const key = `tasks/${taskId}/${uuidv4()}.${fileExt}`;
 
-      priority: req.body.priority,
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: uploadedFile.buffer,
+          ContentType: uploadedFile.mimetype,
+        }),
+      );
 
-      teamId: req.body.teamId,
+      const region = process.env.AWS_REGION || "us-east-1";
+      imageUrl = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+      thumbnailUrl = imageUrl;
+    }
 
-      assigneeId: req.body.assigneeId,
+    // Only include fields that are provided and non-empty to avoid DynamoDB empty-string errors
+    const task = { taskId, createdAt: new Date().toISOString() };
 
-      deadline: req.body.deadline || null,
-
-      projectId: req.body.projectId || null,
-
-      imageUrl: req.body.imageUrl || null,
-
-      thumbnailUrl: req.body.thumbnailUrl || null,
-
-      createdAt: new Date().toISOString(),
+    const pick = (v) => {
+      if (v === undefined || v === null) return undefined;
+      const s = String(v).trim();
+      return s === "" ? undefined : s;
     };
+
+    const title = pick(req.body.title);
+    const description = pick(req.body.description);
+    const status = pick(req.body.status) || "To Do";
+    const priority = pick(req.body.priority);
+    const teamId = pick(req.body.teamId);
+    const assigneeId = pick(req.body.assigneeId);
+    const deadline = pick(req.body.deadline);
+    const projectId = pick(req.body.projectId);
+
+    if (title) task.title = title;
+    if (description) task.description = description;
+    if (status) task.status = status;
+    if (priority) task.priority = priority;
+    if (teamId) task.teamId = teamId;
+    if (assigneeId) task.assigneeId = assigneeId;
+    if (deadline) task.deadline = deadline;
+    if (projectId) task.projectId = projectId;
+
+    if (imageUrl) task.imageUrl = imageUrl;
+    else if (pick(req.body.imageUrl)) task.imageUrl = pick(req.body.imageUrl);
+
+    if (thumbnailUrl) task.thumbnailUrl = thumbnailUrl;
+    else if (pick(req.body.thumbnailUrl)) task.thumbnailUrl = pick(req.body.thumbnailUrl);
 
     await dynamoDB.send(
       new PutCommand({
@@ -70,6 +112,31 @@ export const createTask = async (req, res) => {
         Item: task,
       }),
     );
+
+    // If assigneeId was provided at creation, publish to SNS for task assignment workflow
+    if (assigneeId) {
+      try {
+        const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+        if (topicArn) {
+          console.log(`Publishing task assignment event for task ${taskId} to assignee ${assigneeId}`);
+          await sns.send(
+            new PublishCommand({
+              TopicArn: topicArn,
+              Message: JSON.stringify({
+                taskId,
+                assigneeId,
+                title: task.title,
+                timestamp: new Date().toISOString(),
+              }),
+              Subject: "Task Assignment Notification",
+            }),
+          );
+        }
+      } catch (err) {
+        console.error(`Failed to publish task assignment: ${err.message}`);
+        // Don't fail the request; log and continue
+      }
+    }
 
     res.status(201).json(task);
   } catch (error) {
@@ -186,6 +253,8 @@ export const updateTaskStatus = async (req, res) => {
 // UPDATE TASK — dynamically builds SET expression for only supplied fields
 export const updateTask = async (req, res) => {
   try {
+    const taskId = req.params.id;
+    
     const updatable = [
       "title",
       "description",
@@ -223,13 +292,38 @@ export const updateTask = async (req, res) => {
     const data = await dynamoDB.send(
       new UpdateCommand({
         TableName: "Tasks",
-        Key: { taskId: req.params.id },
+        Key: { taskId },
         UpdateExpression: `SET ${updates.join(", ")}`,
         ExpressionAttributeNames,
         ExpressionAttributeValues,
         ReturnValues: "ALL_NEW",
       }),
     );
+
+    // If assigneeId was updated, publish to SNS for task assignment workflow
+    if (req.body.assigneeId !== undefined) {
+      try {
+        const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+        if (topicArn) {
+          console.log(`Publishing task assignment event for task ${taskId} to assignee ${req.body.assigneeId}`);
+          await sns.send(
+            new PublishCommand({
+              TopicArn: topicArn,
+              Message: JSON.stringify({
+                taskId,
+                assigneeId: req.body.assigneeId,
+                title: data.Attributes.title,
+                timestamp: new Date().toISOString(),
+              }),
+              Subject: "Task Assignment Notification",
+            }),
+          );
+        }
+      } catch (err) {
+        console.error(`Failed to publish task assignment: ${err.message}`);
+        // Don't fail the request; log and continue
+      }
+    }
 
     res.json(data.Attributes);
   } catch (error) {

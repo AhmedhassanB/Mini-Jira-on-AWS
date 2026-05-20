@@ -1,0 +1,12 @@
+{
+  "name": "image-resize",
+  "version": "1.0.0",
+  "description": "Lambda function to resize images uploaded to S3",
+  "main": "handler.js",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "@aws-sdk/client-dynamodb": "^3.400.0"
+  }
+}

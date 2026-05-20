@@ -1,0 +1,12 @@
+{
+  "name": "task-assignment-worker",
+  "version": "1.0.0",
+  "description": "Lambda worker for draining SQS queue, writing activity logs to CloudWatch, and publishing custom metrics. Email notifications are handled by SNS email subscription (compliant with requirements).",
+  "main": "handler.js",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1045.0",
+    "@aws-sdk/client-dynamodb": "^3.1045.0",
+    "@aws-sdk/lib-dynamodb": "^3.1045.0"
+  }
+}

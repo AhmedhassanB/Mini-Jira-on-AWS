@@ -11,6 +11,12 @@ import {
   getTasksByAssignee,
   getTasksByProject,
 } from "../controllers/taskController.js";
+import {
+  uploadTaskImage,
+  handleUploadTaskImage,
+  uploadTaskImageMiddleware,
+  extractTextFieldsFromMultipart,
+} from "../controllers/uploadController.js";
 //im putting those here since they are related to the task
 import {  createComment,
   getCommentsByTask,
@@ -21,7 +27,9 @@ from "../controllers/commentController.js";
 const router = Router();
 
 // Collection routes
-router.post("/", createTask);
+// Allow optional file upload in task creation: form-data key `file`
+// Use the JSON-friendly wrapper and extractor so text fields are moved from req.files to req.body
+router.post("/", uploadTaskImageMiddleware, extractTextFieldsFromMultipart, createTask);
 router.get("/", getAllTasks);
 
 // Filtered queries — defined before /:id to avoid param conflict
@@ -33,10 +41,11 @@ router.get("/project/:projectId", getTasksByProject);
 router.get("/:id", getTaskById);
 router.put("/:id", updateTask);
 router.delete("/:id", deleteTask);
+router.post("/:id/image", authMiddleware, handleUploadTaskImage, uploadTaskImage);
 
 // Comment routes require authentication
-router.post("/:id/comments", createComment);
+router.post("/:id/comments", authMiddleware, createComment);
 router.get("/:id/comments", getCommentsByTask);
-router.put('/:id/comments/:commentId', updateComment);
-router.delete('/:id/comments/:commentId', deleteComment);
+router.put('/:id/comments/:commentId', authMiddleware, updateComment);
+router.delete('/:id/comments/:commentId', authMiddleware, deleteComment);
 export default router;

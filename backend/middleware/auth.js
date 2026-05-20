@@ -1,4 +1,19 @@
 import { verifyAccessToken } from "../config/cognito.js";
+import { GetCommand } from "@aws-sdk/lib-dynamodb";
+import dynamoDB from "../config/dynamodb.js";
+
+const usersTableName = process.env.USERS_TABLE_NAME || "Users";
+
+async function fetchDbProfile(sub) {
+  try {
+    const result = await dynamoDB.send(
+      new GetCommand({ TableName: usersTableName, Key: { userId: sub } })
+    );
+    return result.Item || null;
+  } catch {
+    return null;
+  }
+}
 
 function extractClaim(payload, keys) {
   for (const k of keys) {
@@ -16,15 +31,20 @@ export async function authMiddleware(req, res, next) {
     const token = auth.split(" ")[1];
     const payload = await verifyAccessToken(token);
 
-    // Cognito custom attributes are often exposed as `custom:attrName`
-    const role = extractClaim(payload, ["custom:role", "role", "roleId"]);
-    const teamId = extractClaim(payload, ["custom:teamId", "teamId"]);
+    // Enrich with DynamoDB profile so downstream controllers get real name/role/teamId
+    const db = await fetchDbProfile(payload.sub);
+
+    const role = db?.role || extractClaim(payload, ["custom:role", "role", "roleId"]) || null;
+    const teamId = db?.teamId || extractClaim(payload, ["custom:teamId", "teamId"]) || null;
 
     req.user = {
       sub: payload.sub,
-      username: payload.username || payload["cognito:username"],
-      role: role || null,
-      teamId: teamId || null,
+      // db.username is the display name stored at signup; never expose Cognito internal UUID
+      username: db?.username || db?.name || null,
+      email: db?.email || null,
+      role,
+      teamId,
+      dbProfile: db || null,   // forwarded to me() so it doesn't do a second DynamoDB call
       claims: payload,
     };
 

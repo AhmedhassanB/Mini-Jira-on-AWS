@@ -26,11 +26,12 @@ function getKey(header, callback) {
 
 export function verifyAccessToken(token) {
   return new Promise((resolve, reject) => {
+    // Cognito access tokens carry client_id, not aud — do NOT set audience here
+    // (aud audience check is for ID tokens only)
     const options = {
       algorithms: ["RS256"],
       issuer,
     };
-    if (clientId) options.audience = clientId;
 
     jwt.verify(token, getKey, options, (err, decoded) => {
       if (err) return reject(err);

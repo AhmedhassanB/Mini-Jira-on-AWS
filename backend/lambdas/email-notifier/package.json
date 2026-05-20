@@ -1,0 +1,13 @@
+{
+  "name": "email-notifier",
+  "version": "1.0.0",
+  "description": "Lambda function for sending task assignment notification emails via SES",
+  "type": "module",
+  "main": "handler.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1045.0",
+    "@aws-sdk/client-ses": "^3.1045.0",
+    "@aws-sdk/util-dynamodb": "^3.1045.0"
+  },
+  "devDependencies": {}
+}
