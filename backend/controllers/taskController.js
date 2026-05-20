@@ -1,4 +1,5 @@
 import dynamoDB from "../config/dynamodb.js";
+import sns from "../config/sns.js";
 
 import {
   PutCommand,
@@ -10,6 +11,7 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 
 import { ListTablesCommand } from "@aws-sdk/client-dynamodb";
+import { PublishCommand } from "@aws-sdk/client-sns";
 
 import { v4 as uuidv4 } from "uuid";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
@@ -110,6 +112,31 @@ export const createTask = async (req, res) => {
         Item: task,
       }),
     );
+
+    // If assigneeId was provided at creation, publish to SNS for task assignment workflow
+    if (assigneeId) {
+      try {
+        const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+        if (topicArn) {
+          console.log(`Publishing task assignment event for task ${taskId} to assignee ${assigneeId}`);
+          await sns.send(
+            new PublishCommand({
+              TopicArn: topicArn,
+              Message: JSON.stringify({
+                taskId,
+                assigneeId,
+                title: task.title,
+                timestamp: new Date().toISOString(),
+              }),
+              Subject: "Task Assignment Notification",
+            }),
+          );
+        }
+      } catch (err) {
+        console.error(`Failed to publish task assignment: ${err.message}`);
+        // Don't fail the request; log and continue
+      }
+    }
 
     res.status(201).json(task);
   } catch (error) {
@@ -226,6 +253,8 @@ export const updateTaskStatus = async (req, res) => {
 // UPDATE TASK — dynamically builds SET expression for only supplied fields
 export const updateTask = async (req, res) => {
   try {
+    const taskId = req.params.id;
+    
     const updatable = [
       "title",
       "description",
@@ -263,13 +292,38 @@ export const updateTask = async (req, res) => {
     const data = await dynamoDB.send(
       new UpdateCommand({
         TableName: "Tasks",
-        Key: { taskId: req.params.id },
+        Key: { taskId },
         UpdateExpression: `SET ${updates.join(", ")}`,
         ExpressionAttributeNames,
         ExpressionAttributeValues,
         ReturnValues: "ALL_NEW",
       }),
     );
+
+    // If assigneeId was updated, publish to SNS for task assignment workflow
+    if (req.body.assigneeId !== undefined) {
+      try {
+        const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+        if (topicArn) {
+          console.log(`Publishing task assignment event for task ${taskId} to assignee ${req.body.assigneeId}`);
+          await sns.send(
+            new PublishCommand({
+              TopicArn: topicArn,
+              Message: JSON.stringify({
+                taskId,
+                assigneeId: req.body.assigneeId,
+                title: data.Attributes.title,
+                timestamp: new Date().toISOString(),
+              }),
+              Subject: "Task Assignment Notification",
+            }),
+          );
+        }
+      } catch (err) {
+        console.error(`Failed to publish task assignment: ${err.message}`);
+        // Don't fail the request; log and continue
+      }
+    }
 
     res.json(data.Attributes);
   } catch (error) {
