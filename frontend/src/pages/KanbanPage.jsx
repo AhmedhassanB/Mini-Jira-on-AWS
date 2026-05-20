@@ -25,7 +25,8 @@ export default function KanbanPage() {
     user?.role === 'Employee' && user?.teamId ? { teamId: user.teamId } : {}
   )
 
-  const filteredTasks = filterTasks(tasks, { ...filters, status: '' }) // status filter shows all in kanban view
+  const filteredTasks = filterTasks(tasks, filters)
+  const hasActiveFilters = filters.search || filters.status || filters.priority || filters.teamId
 
   const handleAddTask = (status) => {
     setCreateStatus(status)
@@ -57,7 +58,7 @@ export default function KanbanPage() {
         <TaskFilters filters={filters} onChange={setFilters} />
       </div>
 
-      {filteredTasks.length === 0 && !filters.search ? (
+      {filteredTasks.length === 0 && !hasActiveFilters ? (
         <EmptyState
           icon={Kanban}
           title="No tasks yet"
@@ -65,6 +66,17 @@ export default function KanbanPage() {
           action={
             <Button onClick={() => setCreateOpen(true)}>
               <Plus size={16} /> Create Task
+            </Button>
+          }
+        />
+      ) : filteredTasks.length === 0 && hasActiveFilters ? (
+        <EmptyState
+          icon={Kanban}
+          title="No tasks match your filters"
+          description="Try adjusting or clearing the filters above."
+          action={
+            <Button variant="outline" onClick={() => setFilters({ search: '', status: '', priority: '', teamId: '' })}>
+              Clear Filters
             </Button>
           }
         />
