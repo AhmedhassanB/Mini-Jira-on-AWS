@@ -17,9 +17,9 @@ export const createProject = async (req, res) => {
     const project = {
       projectId: uuidv4(),
       name: req.body.name,
-      description: req.body.description || null,
-      ownerId: req.body.ownerId,
-      teamId: req.body.teamId || null,
+      description: req.body.description || undefined,
+      ownerId: req.body.ownerId || undefined,
+      teamId: req.body.teamId || undefined,
       createdAt: new Date().toISOString(),
     };
 

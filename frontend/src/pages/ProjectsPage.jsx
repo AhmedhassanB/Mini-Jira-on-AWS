@@ -11,15 +11,22 @@ import { Progress } from '@/components/ui/progress'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import PageHeader from '@/components/common/PageHeader'
 import EmptyState from '@/components/common/EmptyState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { CardSkeleton } from '@/components/common/LoadingSkeleton'
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from '@/hooks/useProjects'
+import { useTeams } from '@/hooks/useTeams'
 import { useTasks } from '@/hooks/useTasks'
+import { useAuthStore } from '@/store/authStore'
 
 function ProjectModal({ open, onOpenChange, project }) {
   const isEdit = !!project
+  const { user } = useAuthStore()
+  const { data: teams = [] } = useTeams()
   const [form, setForm] = useState({
     name: project?.name || '',
     description: project?.description || '',
@@ -32,10 +39,16 @@ function ProjectModal({ open, onOpenChange, project }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    const payload = { ...form }
+    if (!payload.teamId) delete payload.teamId
+    if (!payload.description) delete payload.description
     if (isEdit) {
-      update.mutate({ id: project.projectId, ...form }, { onSuccess: () => onOpenChange(false) })
+      update.mutate({ id: project.projectId, ...payload }, { onSuccess: () => onOpenChange(false) })
     } else {
-      create.mutate(form, { onSuccess: () => { setForm({ name: '', description: '', teamId: '' }); onOpenChange(false) } })
+      create.mutate(
+        { ...payload, ownerId: user?.userId },
+        { onSuccess: () => { setForm({ name: '', description: '', teamId: '' }); onOpenChange(false) } }
+      )
     }
   }
 
@@ -55,8 +68,16 @@ function ProjectModal({ open, onOpenChange, project }) {
             <Textarea value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="What is this project about?" className="h-20" />
           </div>
           <div className="space-y-1.5">
-            <Label>Team ID</Label>
-            <Input value={form.teamId} onChange={(e) => set('teamId', e.target.value)} placeholder="Optional" />
+            <Label>Team</Label>
+            <Select value={form.teamId || 'none'} onValueChange={(v) => set('teamId', v === 'none' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="No team" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No team</SelectItem>
+                {teams.map((t) => (
+                  <SelectItem key={t.teamId} value={t.teamId}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -72,7 +93,7 @@ function ProjectModal({ open, onOpenChange, project }) {
 
 function ProjectCard({ project, onEdit, onDelete }) {
   const { data: tasks = [] } = useTasks({ projectId: project.projectId })
-  const done = tasks.filter((t) => t.status === 'done').length
+  const done = tasks.filter((t) => t.status === 'Done').length
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0
 
   return (
