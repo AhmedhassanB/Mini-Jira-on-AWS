@@ -31,7 +31,7 @@ export function useCreateTask() {
       qc.invalidateQueries({ queryKey: ['tasks'] })
       toast.success('Task created!')
     },
-    onError: (err) => toast.error(err?.message || 'Failed to create task'),
+    onError: (err) => toast.error(err?.error || err?.details || err?.message || 'Failed to create task'),
   })
 }
 

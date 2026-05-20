@@ -16,7 +16,7 @@ import { Kanban } from 'lucide-react'
 export default function KanbanPage() {
   const { user } = useAuthStore()
   const [createOpen, setCreateOpen] = useState(false)
-  const [createStatus, setCreateStatus] = useState('todo')
+  const [createStatus, setCreateStatus] = useState('To Do')
   const [selectedTask, setSelectedTask] = useState(null)
   const [editTask, setEditTask] = useState(null)
   const [filters, setFilters] = useState({ search: '', status: '', priority: '', teamId: '' })
@@ -47,7 +47,7 @@ export default function KanbanPage() {
         title="Kanban Board"
         description="Drag and drop tasks between columns to update their status."
         action={
-          <Button onClick={() => { setCreateStatus('todo'); setCreateOpen(true) }} size="sm">
+          <Button onClick={() => { setCreateStatus('To Do'); setCreateOpen(true) }} size="sm">
             <Plus size={16} /> Add Task
           </Button>
         }

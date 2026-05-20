@@ -53,13 +53,13 @@ export const createTask = async (req, res) => {
 
       assigneeId: req.body.assigneeId,
 
-      deadline: req.body.deadline || null,
+      deadline: req.body.deadline || undefined,
 
-      projectId: req.body.projectId || null,
+      projectId: req.body.projectId || undefined,
 
-      imageUrl: req.body.imageUrl || null,
+      imageUrl: req.body.imageUrl || undefined,
 
-      thumbnailUrl: req.body.thumbnailUrl || null,
+      thumbnailUrl: req.body.thumbnailUrl || undefined,
 
       createdAt: new Date().toISOString(),
     };
