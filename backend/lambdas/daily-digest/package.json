@@ -1,0 +1,12 @@
+{
+  "name": "daily-digest",
+  "version": "1.0.0",
+  "description": "EventBridge daily digest: scans tasks due today and sends digest email via SNS",
+  "type": "module",
+  "main": "handler.js",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.1045.0",
+    "@aws-sdk/client-dynamodb": "^3.1045.0",
+    "@aws-sdk/lib-dynamodb": "^3.1045.0"
+  }
+}

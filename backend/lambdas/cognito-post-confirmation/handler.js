@@ -30,23 +30,44 @@ export const handler = async (event) => {
     console.log(`User confirmed: userId=${userId}, email=${email}, username=${username}`);
 
     // Auto-subscribe email to SNS task-assignments topic
-    console.log(`Subscribing email to SNS topic: ${email}`);
+    console.log(`Subscribing email to SNS task-assignments topic: ${email}`);
     try {
-      const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
-      if (!topicArn) {
+      const taskAssignmentsArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+      if (!taskAssignmentsArn) {
         console.warn("SNS_TASK_ASSIGNMENTS_TOPIC_ARN not configured");
       } else {
         await snsClient.send(
           new SubscribeCommand({
-            TopicArn: topicArn,
+            TopicArn: taskAssignmentsArn,
             Protocol: "email",
             Endpoint: email,
           }),
         );
-        console.log(`Email ${email} subscribed to SNS topic`);
+        console.log(`Email ${email} subscribed to task-assignments topic`);
       }
     } catch (snsErr) {
-      console.error(`Failed to subscribe to SNS: ${snsErr.message}`);
+      console.error(`Failed to subscribe to task-assignments: ${snsErr.message}`);
+      // Continue anyway
+    }
+
+    // Auto-subscribe email to SNS daily-digest topic
+    console.log(`Subscribing email to SNS daily-digest topic: ${email}`);
+    try {
+      const dailyDigestArn = process.env.SNS_DAILY_DIGEST_TOPIC_ARN;
+      if (!dailyDigestArn) {
+        console.warn("SNS_DAILY_DIGEST_TOPIC_ARN not configured");
+      } else {
+        await snsClient.send(
+          new SubscribeCommand({
+            TopicArn: dailyDigestArn,
+            Protocol: "email",
+            Endpoint: email,
+          }),
+        );
+        console.log(`Email ${email} subscribed to daily-digest topic`);
+      }
+    } catch (snsErr) {
+      console.error(`Failed to subscribe to daily-digest: ${snsErr.message}`);
       // Continue anyway
     }
 
