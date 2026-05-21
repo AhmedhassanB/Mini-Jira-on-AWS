@@ -1,5 +1,6 @@
 import dynamoDB from "../config/dynamodb.js";
 import sns from "../config/sns.js";
+import { publishMetric } from "../config/cloudwatch.js";
 
 import {
   PutCommand,
@@ -136,6 +137,12 @@ export const createTask = async (req, res) => {
         console.error(`Failed to publish task assignment: ${err.message}`);
         // Don't fail the request; log and continue
       }
+    }
+
+    const teamDimension = teamId ? [{ Name: "TeamId", Value: teamId }] : [];
+    await publishMetric("TasksCreated", 1, teamDimension);
+    if (assigneeId) {
+      await publishMetric("TasksAssignedPerTeam", 1, teamDimension);
     }
 
     res.status(201).json(task);
@@ -325,7 +332,17 @@ export const updateTask = async (req, res) => {
       }
     }
 
-    res.json(data.Attributes);
+    const updatedTask = data.Attributes;
+    const teamDimension = updatedTask?.teamId ? [{ Name: "TeamId", Value: updatedTask.teamId }] : [];
+
+    if (req.body.status === "Done") {
+      await publishMetric("TasksClosed", 1, teamDimension);
+    }
+    if (req.body.assigneeId !== undefined) {
+      await publishMetric("TasksAssignedPerTeam", 1, teamDimension);
+    }
+
+    res.json(updatedTask);
   } catch (error) {
     console.log(error);
     res.status(500).json({ error: error.message });
