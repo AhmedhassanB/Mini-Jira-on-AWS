@@ -52,12 +52,21 @@ export const createTask = async (req, res) => {
     let thumbnailUrl;
 
     // Support multer.any (req.files as array); filter for actual files, move text fields to req.body
-    const uploadedFile = req.files?.find((f) => f.mimetype?.startsWith("image/"));
+    const uploadedFile = req.files?.find((f) =>
+      f.mimetype?.startsWith("image/"),
+    );
     if (uploadedFile) {
-      const bucket = process.env.S3_BUCKET_ORIGINALS || process.env.S3_BUCKET_RESIZED || "";
-      if (!bucket) return res.status(500).json({ error: "S3 originals bucket not configured" });
+      const bucket =
+        process.env.S3_BUCKET_ORIGINALS || process.env.S3_BUCKET_RESIZED || "";
+      if (!bucket)
+        return res
+          .status(500)
+          .json({ error: "S3 originals bucket not configured" });
 
-      const fileExt = uploadedFile.originalname && uploadedFile.originalname.includes(".") ? uploadedFile.originalname.split(".").pop() : "bin";
+      const fileExt =
+        uploadedFile.originalname && uploadedFile.originalname.includes(".")
+          ? uploadedFile.originalname.split(".").pop()
+          : "bin";
       const key = `tasks/${taskId}/${uuidv4()}.${fileExt}`;
 
       await s3.send(
@@ -105,7 +114,8 @@ export const createTask = async (req, res) => {
     else if (pick(req.body.imageUrl)) task.imageUrl = pick(req.body.imageUrl);
 
     if (thumbnailUrl) task.thumbnailUrl = thumbnailUrl;
-    else if (pick(req.body.thumbnailUrl)) task.thumbnailUrl = pick(req.body.thumbnailUrl);
+    else if (pick(req.body.thumbnailUrl))
+      task.thumbnailUrl = pick(req.body.thumbnailUrl);
 
     await dynamoDB.send(
       new PutCommand({
@@ -119,7 +129,9 @@ export const createTask = async (req, res) => {
       try {
         const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
         if (topicArn) {
-          console.log(`Publishing task assignment event for task ${taskId} to assignee ${assigneeId}`);
+          console.log(
+            `Publishing task assignment event for task ${taskId} to assignee ${assigneeId}`,
+          );
           await sns.send(
             new PublishCommand({
               TopicArn: topicArn,
@@ -261,7 +273,7 @@ export const updateTaskStatus = async (req, res) => {
 export const updateTask = async (req, res) => {
   try {
     const taskId = req.params.id;
-    
+
     const updatable = [
       "title",
       "description",
@@ -312,7 +324,9 @@ export const updateTask = async (req, res) => {
       try {
         const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
         if (topicArn) {
-          console.log(`Publishing task assignment event for task ${taskId} to assignee ${req.body.assigneeId}`);
+          console.log(
+            `Publishing task assignment event for task ${taskId} to assignee ${req.body.assigneeId}`,
+          );
           await sns.send(
             new PublishCommand({
               TopicArn: topicArn,
@@ -333,9 +347,17 @@ export const updateTask = async (req, res) => {
     }
 
     const updatedTask = data.Attributes;
-    const teamDimension = updatedTask?.teamId ? [{ Name: "TeamId", Value: updatedTask.teamId }] : [];
+    const teamDimension = updatedTask?.teamId
+      ? [{ Name: "TeamId", Value: updatedTask.teamId }]
+      : [];
 
     if (req.body.status === "Done") {
+      if (updatedTask.createdAt) {
+        const hoursToClose =
+          (Date.now() - new Date(updatedTask.createdAt).getTime()) /
+          (1000 * 60 * 60);
+        await publishMetric("AvgTimeToClose", hoursToClose, teamDimension);
+      }
       await publishMetric("TasksClosed", 1, teamDimension);
     }
     if (req.body.assigneeId !== undefined) {
