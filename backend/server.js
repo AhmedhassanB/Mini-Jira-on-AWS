@@ -95,7 +95,7 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.use(express.static(join(__dirname, '../frontend/dist')));
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
   res.sendFile(join(__dirname, '../frontend/dist/index.html'));
 });
 
