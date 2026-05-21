@@ -11,7 +11,16 @@ import teamRoutes from "./routes/teamRoutes.js";
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      process.env.CLOUDFRONT_URL,
+      process.env.ALB_URL,
+    ].filter(Boolean),
+    credentials: true,
+  }),
+);
 app.use(express.json());
 app.use(
   session({
@@ -21,7 +30,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
     },
   }),
 );
@@ -34,6 +43,10 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/teams", teamRoutes);
 
+app.get("/health", (_req, res) => {
+  res.status(200).send("OK");
+});
+
 app.get("/", (req, res) => {
   res.render("home", {
     isAuthenticated: Boolean(req.session?.userInfo),
@@ -41,7 +54,7 @@ app.get("/", (req, res) => {
   });
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
