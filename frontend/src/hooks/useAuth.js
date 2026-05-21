@@ -69,14 +69,14 @@ export function useLogin() {
         const user = parseMeResponse(me, claims)
         setAuth(user, token, idToken)
         queryClient.clear()
-        navigate('/')
+        navigate('/dashboard')
         toast.success(`Welcome back, ${user.name || user.email}!`)
       } catch {
         // /auth/me failed — fall back to JWT claims so login still works
         const user = parseMeResponse({}, claims)
         setAuth(user, token, idToken)
         queryClient.clear()
-        navigate('/')
+        navigate('/dashboard')
         toast.success('Welcome back!')
       }
     },

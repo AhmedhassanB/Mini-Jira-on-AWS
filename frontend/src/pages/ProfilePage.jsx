@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { User, Mail, Shield, Users, Edit3, Save, X } from 'lucide-react'
+import { Mail, Shield, Users, Edit3, Save, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,7 +39,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-2xl">
+    <div className="animate-fade-in flex flex-col items-center">
+      <div className="w-full max-w-2xl">
       <PageHeader title="Profile" description="Manage your account information." />
 
       <div className="space-y-6">
@@ -118,16 +119,6 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-muted">
-                <User size={16} className="text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">User ID</p>
-                <p className="text-sm font-medium font-mono text-foreground">{user?.userId || user?.sub || '—'}</p>
-              </div>
-            </div>
-            <Separator />
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-muted">
                 <Mail size={16} className="text-muted-foreground" />
               </div>
               <div>
@@ -161,6 +152,7 @@ export default function ProfilePage() {
             )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   )

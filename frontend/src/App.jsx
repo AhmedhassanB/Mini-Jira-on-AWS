@@ -7,6 +7,7 @@ import AuthLayout from '@/layouts/AuthLayout'
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import ConfirmEmail from '@/pages/auth/ConfirmEmail'
+import LandingPage from '@/pages/LandingPage'
 import Dashboard from '@/pages/Dashboard'
 import KanbanPage from '@/pages/KanbanPage'
 import ProjectsPage from '@/pages/ProjectsPage'
@@ -29,6 +30,9 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Public landing page — no auth required */}
+      <Route path="/" element={<LandingPage />} />
+
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -37,7 +41,7 @@ export default function App() {
 
       <Route element={<PrivateRoute />}>
         <Route element={<MainLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/kanban" element={<KanbanPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/teams" element={<TeamsPage />} />

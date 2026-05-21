@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Kanban, FolderKanban, Users, User,
-  BarChart3, Activity, Zap, LogOut, X, ChevronRight,
+  BarChart3, Activity, LogOut, X, ChevronRight,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/utils/cn'
@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { getInitials, displayName } from '@/utils/helpers'
 
 const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/kanban', icon: Kanban, label: 'Kanban Board' },
   { to: '/projects', icon: FolderKanban, label: 'Projects' },
   { to: '/teams', icon: Users, label: 'Teams' },
@@ -53,14 +53,11 @@ export default function Sidebar({ open, onClose }) {
           className="relative z-30 flex flex-col h-full overflow-hidden bg-card border-r border-border shrink-0"
         >
           <div className="flex flex-col h-full w-60">
-            {/* Logo */}
+            {/* Brand */}
             <div className="flex items-center justify-between h-14 px-4 border-b border-border shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-primary rounded-lg">
-                  <Zap size={16} className="text-primary-foreground" />
-                </div>
-                <span className="font-bold text-foreground">Mini Jira</span>
-              </div>
+              <span className="font-extrabold text-lg bg-gradient-to-r from-purple-400 to-violet-300 bg-clip-text text-transparent tracking-tight">
+                Mini Jira
+              </span>
               <button onClick={onClose} className="lg:hidden text-muted-foreground hover:text-foreground">
                 <X size={18} />
               </button>
@@ -72,7 +69,7 @@ export default function Sidebar({ open, onClose }) {
                 <NavLink
                   key={to}
                   to={to}
-                  end={to === '/'}
+                  end={to === '/dashboard'}
                   className={({ isActive }) =>
                     cn(
                       'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all group',

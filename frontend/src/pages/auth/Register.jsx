@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Zap, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,11 +36,10 @@ export default function Register() {
         transition={{ duration: 0.3 }}
         className="w-full max-w-sm"
       >
-        <div className="flex items-center justify-center gap-2.5 mb-8">
-          <div className="p-2 bg-primary rounded-xl shadow-lg shadow-primary/25">
-            <Zap size={22} className="text-primary-foreground" />
-          </div>
-          <span className="text-2xl font-bold text-foreground tracking-tight">Mini Jira</span>
+        <div className="flex items-center justify-center mb-8">
+          <span className="text-3xl font-extrabold bg-gradient-to-r from-purple-400 via-violet-300 to-indigo-400 bg-clip-text text-transparent tracking-tight">
+            Mini Jira
+          </span>
         </div>
 
         <Card className="border-border/60 shadow-2xl">
