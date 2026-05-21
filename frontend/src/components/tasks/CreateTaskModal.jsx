@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/select'
 import { useCreateTask, useUpdateTask } from '@/hooks/useTasks'
 import { useTeams } from '@/hooks/useTeams'
+import { useProjects } from '@/hooks/useProjects'
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/utils/constants'
 
 const DEFAULT_FORM = {
@@ -26,22 +27,32 @@ const DEFAULT_FORM = {
 
 export default function CreateTaskModal({ open, onOpenChange, initialStatus, task }) {
   const isEdit = !!task
-  const [form, setForm] = useState(
-    task ? {
-      title: task.title || '',
-      description: task.description || '',
-      status: task.status || 'To Do',
-      priority: task.priority || 'medium',
-      assignee: task.assignee || '',
-      deadline: task.deadline ? task.deadline.slice(0, 10) : '',
-      teamId: task.teamId || '',
-      projectId: task.projectId || '',
-    } : { ...DEFAULT_FORM, status: initialStatus || 'To Do' }
-  )
+  const [form, setForm] = useState({ ...DEFAULT_FORM })
 
   const { data: teams = [] } = useTeams()
+  const { data: projects = [] } = useProjects()
   const createTask = useCreateTask()
   const updateTask = useUpdateTask()
+
+  // Re-populate the form whenever the dialog opens or the task being edited changes.
+  // useState only runs its initializer once on mount, so without this effect the form
+  // would stay empty every time the modal reopens with a different task.
+  useEffect(() => {
+    if (open) {
+      setForm(
+        task ? {
+          title: task.title || '',
+          description: task.description || '',
+          status: task.status || 'To Do',
+          priority: task.priority || 'medium',
+          assignee: task.assignee || '',
+          deadline: task.deadline ? task.deadline.slice(0, 10) : '',
+          teamId: task.teamId || '',
+          projectId: task.projectId || '',
+        } : { ...DEFAULT_FORM, status: initialStatus || 'To Do' }
+      )
+    }
+  }, [open, task])
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }))
 
@@ -158,13 +169,16 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="projectId">Project ID</Label>
-              <Input
-                id="projectId"
-                value={form.projectId}
-                onChange={(e) => set('projectId', e.target.value)}
-                placeholder="Optional"
-              />
+              <Label>Project</Label>
+              <Select value={form.projectId || 'none'} onValueChange={(v) => set('projectId', v === 'none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No project</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.projectId} value={p.projectId}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

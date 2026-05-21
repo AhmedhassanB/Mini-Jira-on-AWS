@@ -38,14 +38,29 @@ export const createProject = async (req, res) => {
 };
 
 // GET ALL PROJECTS
+// Managers see all projects; employees are scoped to their own team's projects
 export const getAllProjects = async (req, res) => {
   try {
-    const data = await dynamoDB.send(
-      new ScanCommand({
-        TableName: "Projects",
-      })
-    );
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const employeeTeamId = req.user?.teamId;
 
+    if (role === "employee") {
+      if (!employeeTeamId) {
+        return res.status(403).json({ error: "Employee account has no team assigned" });
+      }
+      const data = await dynamoDB.send(
+        new QueryCommand({
+          TableName: "Projects",
+          IndexName: "GSI_teamId",
+          KeyConditionExpression: "teamId = :teamId",
+          ExpressionAttributeValues: { ":teamId": employeeTeamId },
+        })
+      );
+      return res.json(data.Items);
+    }
+
+    // Manager/Admin: full scan
+    const data = await dynamoDB.send(new ScanCommand({ TableName: "Projects" }));
     res.json(data.Items);
   } catch (error) {
     console.error(error);
@@ -54,6 +69,7 @@ export const getAllProjects = async (req, res) => {
 };
 
 // GET PROJECT BY ID
+// Employees may only fetch projects that belong to their own team
 export const getProjectById = async (req, res) => {
   try {
     const data = await dynamoDB.send(
@@ -65,6 +81,11 @@ export const getProjectById = async (req, res) => {
 
     if (!data.Item) {
       return res.status(404).json({ error: "Project not found" });
+    }
+
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    if (role === "employee" && data.Item.teamId !== req.user.teamId) {
+      return res.status(403).json({ error: "Access denied: project belongs to a different team" });
     }
 
     res.json(data.Item);

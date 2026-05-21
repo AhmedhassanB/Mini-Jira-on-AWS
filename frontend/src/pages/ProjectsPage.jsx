@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, FolderKanban, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,15 +27,21 @@ function ProjectModal({ open, onOpenChange, project }) {
   const isEdit = !!project
   const { user } = useAuthStore()
   const { data: teams = [] } = useTeams()
-  const [form, setForm] = useState({
-    name: project?.name || '',
-    description: project?.description || '',
-    teamId: project?.teamId || '',
-  })
+  const [form, setForm] = useState({ name: '', description: '', teamId: '' })
   const create = useCreateProject()
   const update = useUpdateProject()
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const isPending = create.isPending || update.isPending
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        name: project?.name || '',
+        description: project?.description || '',
+        teamId: project?.teamId || '',
+      })
+    }
+  }, [open, project])
 
   const handleSubmit = (e) => {
     e.preventDefault()

@@ -156,44 +156,60 @@ export const createTask = async (req, res) => {
 };
 
 // GET ALL TASKS
+// Managers see everything; employees are automatically scoped to their own team
 export const getAllTasks = async (req, res) => {
   try {
-    const data = await dynamoDB.send(
-      new ScanCommand({
-        TableName: "Tasks",
-      }),
-    );
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const employeeTeamId = req.user?.teamId;
 
+    if (role === "employee") {
+      if (!employeeTeamId) {
+        return res.status(403).json({ error: "Employee account has no team assigned" });
+      }
+      const data = await dynamoDB.send(
+        new QueryCommand({
+          TableName: "Tasks",
+          IndexName: "teamId-index",
+          KeyConditionExpression: "teamId = :teamId",
+          ExpressionAttributeValues: { ":teamId": employeeTeamId },
+        }),
+      );
+      return res.json(data.Items);
+    }
+
+    // Manager/Admin: full scan
+    const data = await dynamoDB.send(new ScanCommand({ TableName: "Tasks" }));
     res.json(data.Items);
   } catch (error) {
     console.log(error);
-
-    res.status(500).json({
-      error: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 };
 
 // GET TASK BY ID
+// Employees may only fetch tasks that belong to their own team
 export const getTaskById = async (req, res) => {
   try {
     const data = await dynamoDB.send(
       new GetCommand({
         TableName: "Tasks",
-
-        Key: {
-          taskId: req.params.id,
-        },
+        Key: { taskId: req.params.id },
       }),
     );
+
+    if (!data.Item) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    if (role === "employee" && data.Item.teamId !== req.user.teamId) {
+      return res.status(403).json({ error: "Access denied: task belongs to a different team" });
+    }
 
     res.json(data.Item);
   } catch (error) {
     console.log(error);
-
-    res.status(500).json({
-      error: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -261,7 +277,19 @@ export const updateTaskStatus = async (req, res) => {
 export const updateTask = async (req, res) => {
   try {
     const taskId = req.params.id;
-    
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+
+    // Employees may only change the status field; all other fields are manager-only
+    if (role === "employee") {
+      const attemptedFields = Object.keys(req.body).filter((f) => f !== "status");
+      if (attemptedFields.length > 0) {
+        return res.status(403).json({
+          error: "Employees may only update task status",
+          disallowedFields: attemptedFields,
+        });
+      }
+    }
+
     const updatable = [
       "title",
       "description",
@@ -350,8 +378,14 @@ export const updateTask = async (req, res) => {
 };
 
 // GET TASKS BY TEAM — queries GSI teamId-index, sorted by createdAt
+// Employees may only query their own team; managers can query any team
 export const getTasksByTeam = async (req, res) => {
   try {
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    if (role === "employee" && req.params.teamId !== req.user.teamId) {
+      return res.status(403).json({ error: "Access denied: employees may only view their own team's tasks" });
+    }
+
     const data = await dynamoDB.send(
       new QueryCommand({
         TableName: "Tasks",
@@ -371,8 +405,14 @@ export const getTasksByTeam = async (req, res) => {
 };
 
 // GET TASKS BY ASSIGNEE — queries GSI assigneeId-index
+// Employees may only query their own assigneeId; managers can query any assignee
 export const getTasksByAssignee = async (req, res) => {
   try {
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    if (role === "employee" && req.params.assigneeId !== req.user.sub) {
+      return res.status(403).json({ error: "Access denied: employees may only view their own assigned tasks" });
+    }
+
     const data = await dynamoDB.send(
       new QueryCommand({
         TableName: "Tasks",
@@ -392,19 +432,29 @@ export const getTasksByAssignee = async (req, res) => {
 };
 
 // GET TASKS BY PROJECT — queries GSI projectId-index
+// Employees only receive tasks that also belong to their own team
 export const getTasksByProject = async (req, res) => {
   try {
-    const data = await dynamoDB.send(
-      new QueryCommand({
-        TableName: "Tasks",
-        IndexName: "projectId-index",
-        KeyConditionExpression: "projectId = :projectId",
-        ExpressionAttributeValues: {
-          ":projectId": req.params.projectId,
-        },
-      }),
-    );
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const employeeTeamId = req.user?.teamId;
 
+    if (role === "employee" && !employeeTeamId) {
+      return res.status(403).json({ error: "Employee account has no team assigned" });
+    }
+
+    const query = {
+      TableName: "Tasks",
+      IndexName: "projectId-index",
+      KeyConditionExpression: "projectId = :projectId",
+      ExpressionAttributeValues: { ":projectId": req.params.projectId },
+    };
+
+    if (role === "employee") {
+      query.FilterExpression = "teamId = :teamId";
+      query.ExpressionAttributeValues[":teamId"] = employeeTeamId;
+    }
+
+    const data = await dynamoDB.send(new QueryCommand(query));
     res.json(data.Items);
   } catch (error) {
     console.log(error);

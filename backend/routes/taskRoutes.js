@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authMiddleware } from "../middleware/auth.js";
+import { authMiddleware, requireManager } from "../middleware/auth.js";
 
 import {
   createTask,
@@ -27,25 +27,29 @@ from "../controllers/commentController.js";
 const router = Router();
 
 // Collection routes
-// Allow optional file upload in task creation: form-data key `file`
-// Use the JSON-friendly wrapper and extractor so text fields are moved from req.files to req.body
-router.post("/", uploadTaskImageMiddleware, extractTextFieldsFromMultipart, createTask);
-router.get("/", getAllTasks);
+// Only managers can create tasks; file upload allowed via multipart form-data
+router.post("/", authMiddleware, requireManager, uploadTaskImageMiddleware, extractTextFieldsFromMultipart, createTask);
+// All authenticated users can list tasks (controller applies team filter for employees)
+router.get("/", authMiddleware, getAllTasks);
 
 // Filtered queries — defined before /:id to avoid param conflict
-router.get("/team/:teamId", getTasksByTeam);
-router.get("/assignee/:assigneeId", getTasksByAssignee);
-router.get("/project/:projectId", getTasksByProject);
+// All authenticated users; controller enforces that employees can only query their own team
+router.get("/team/:teamId", authMiddleware, getTasksByTeam);
+router.get("/assignee/:assigneeId", authMiddleware, getTasksByAssignee);
+router.get("/project/:projectId", authMiddleware, getTasksByProject);
 
 // Single-resource routes
-router.get("/:id", getTaskById);
-router.put("/:id", updateTask);
-router.delete("/:id", deleteTask);
-router.post("/:id/image", authMiddleware, handleUploadTaskImage, uploadTaskImage);
+router.get("/:id", authMiddleware, getTaskById);
+// All authenticated users can update; controller restricts employees to status-only changes
+router.put("/:id", authMiddleware, updateTask);
+// Only managers can delete tasks
+router.delete("/:id", authMiddleware, requireManager, deleteTask);
+// Only managers can upload/replace task images
+router.post("/:id/image", authMiddleware, requireManager, handleUploadTaskImage, uploadTaskImage);
 
-// Comment routes require authentication
+// Comment routes — all authenticated users can read and write; ownership enforced in controller
 router.post("/:id/comments", authMiddleware, createComment);
-router.get("/:id/comments", getCommentsByTask);
+router.get("/:id/comments", authMiddleware, getCommentsByTask);
 router.put('/:id/comments/:commentId', authMiddleware, updateComment);
 router.delete('/:id/comments/:commentId', authMiddleware, deleteComment);
 export default router;

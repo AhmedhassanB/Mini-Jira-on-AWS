@@ -14,7 +14,7 @@ import { USER_ROLES } from '@/utils/constants'
 
 export default function Register() {
   const [form, setForm] = useState({
-    username: '', email: '', password: '', role: 'Employee', teamId: '',
+    username: '', email: '', password: '', role: 'Employee',
   })
   const [showPass, setShowPass] = useState(false)
   const { mutate: register, isPending } = useRegister()
@@ -23,9 +23,7 @@ export default function Register() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const payload = { ...form }
-    if (!payload.teamId) delete payload.teamId
-    register(payload)
+    register({ ...form })
   }
 
   return (
@@ -102,36 +100,22 @@ export default function Register() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label id="role-label">Role</Label>
-                  <Select
-                    value={form.role}
-                    onValueChange={(v) => set('role', v)}
-                    name="role"
-                  >
-                    <SelectTrigger aria-labelledby="role-label" id="role-select">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {USER_ROLES.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="teamId">Team ID</Label>
-                  <Input
-                    id="teamId"
-                    name="teamId"
-                    placeholder="Optional"
-                    value={form.teamId}
-                    onChange={(e) => set('teamId', e.target.value)}
-                    autoComplete="off"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label id="role-label">Role</Label>
+                <Select
+                  value={form.role}
+                  onValueChange={(v) => set('role', v)}
+                  name="role"
+                >
+                  <SelectTrigger aria-labelledby="role-label" id="role-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {USER_ROLES.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <Button type="submit" className="w-full" disabled={isPending}>
