@@ -2,6 +2,10 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import session from "express-session";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 import authRoute from "./routes/auth.js";
 import oidcRoute from "./routes/oidc.js";
@@ -38,8 +42,6 @@ app.use(
     },
   }),
 );
-
-app.set("view engine", "ejs");
 
 app.use("/auth", authRoute);
 app.use("/oidc", oidcRoute);
@@ -92,11 +94,9 @@ app.get("/api/health", async (_req, res) => {
   res.status(checks.status === "ok" ? 200 : 503).json(checks);
 });
 
-app.get("/", (req, res) => {
-  res.render("home", {
-    isAuthenticated: Boolean(req.session?.userInfo),
-    userInfo: req.session?.userInfo || null,
-  });
+app.use(express.static(join(__dirname, '../frontend/dist')));
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, '../frontend/dist/index.html'));
 });
 
 const PORT = process.env.PORT || 3000;
