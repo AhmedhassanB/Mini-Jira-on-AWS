@@ -2,7 +2,7 @@
 
 ## Architecture Diagram
 
-![Architecture Diagram](architecture-diagram.svg)
+![Architecture Diagram](architecture-diagram.png)
 
 ---
 
