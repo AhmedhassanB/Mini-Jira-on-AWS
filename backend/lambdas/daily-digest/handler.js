@@ -1,12 +1,21 @@
-import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  ScanCommand,
+  GetCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
 
-const dynamoDB = DynamoDBDocumentClient.from(new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" }), {
-  marshallOptions: { removeUndefinedValues: true },
-});
+const dynamoDB = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" }),
+  {
+    marshallOptions: { removeUndefinedValues: true },
+  },
+);
 
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || "us-east-1" });
+const snsClient = new SNSClient({
+  region: process.env.AWS_REGION || "us-east-1",
+});
 
 /**
  * Daily Digest Lambda
@@ -27,7 +36,9 @@ export const handler = async (event) => {
     const todayString = today.toISOString().split("T")[0];
     const tomorrowString = tomorrow.toISOString().split("T")[0];
 
-    console.log(`Scanning for tasks due between ${todayString} and ${tomorrowString}`);
+    console.log(
+      `Scanning for tasks due between ${todayString} and ${tomorrowString}`,
+    );
 
     // Scan Tasks table for tasks due today
     let dueTodayTasks = [];
@@ -73,20 +84,49 @@ export const handler = async (event) => {
       tasksByAssignee[assigneeId].push(task);
     });
 
-    // Publish digest to SNS
-    const topicArn = process.env.SNS_DAILY_DIGEST_TOPIC_ARN;
-    if (!topicArn) {
-      console.error("SNS_DAILY_DIGEST_TOPIC_ARN not configured");
-      return { statusCode: 500, body: JSON.stringify({ error: "SNS topic not configured" }) };
-    }
-
     const publishResults = [];
 
-    // For each assignee, create and send personalized digest
+    // For each assignee, create and send personalized digest to that user's dedicated SNS topic
     for (const [assigneeId, tasks] of Object.entries(tasksByAssignee)) {
       try {
+        // Skip unassigned tasks (no recipient)
+        if (assigneeId === "unassigned") {
+          console.log("Skipping unassigned tasks (no recipient)");
+          publishResults.push({
+            assigneeId: "unassigned",
+            taskCount: tasks.length,
+            status: "skipped",
+            reason: "No assignee",
+          });
+          continue;
+        }
+
+        const userResp = await dynamoDB.send(
+          new GetCommand({
+            TableName: "Users",
+            Key: { userId: assigneeId },
+          }),
+        );
+
+        const topicArn =
+          userResp.Item?.snsTopicArn || userResp.Item?.notificationTopicArn;
+        if (!topicArn) {
+          console.warn(
+            `No SNS topic found for assignee ${assigneeId}; skipping daily digest`,
+          );
+          publishResults.push({
+            assigneeId,
+            taskCount: tasks.length,
+            status: "skipped",
+            reason: "No user topic",
+          });
+          continue;
+        }
+
         const taskList = tasks
-          .map((task) => `- ${task.title} (Priority: ${task.priority || "N/A"})`)
+          .map(
+            (task) => `- ${task.title} (Priority: ${task.priority || "N/A"})`,
+          )
           .join("\n");
 
         const emailBody = `
@@ -102,36 +142,42 @@ Please log in to Mini Jira to view details and track progress.
 This is an automated notification from Mini Jira
         `.trim();
 
-        console.log(`Publishing personalized digest for assignee ${assigneeId}`);
+        console.log(
+          `Publishing digest for assignee ${assigneeId} via ${topicArn}`,
+        );
 
         await snsClient.send(
           new PublishCommand({
             TopicArn: topicArn,
             Subject: `Your Daily Task Digest - ${tasks.length} tasks due today`,
             Message: emailBody,
-            MessageAttributes: {
-              assigneeId: {
-                DataType: "String",
-                StringValue: assigneeId,
-              },
-            },
           }),
         );
 
-        publishResults.push({ assigneeId, taskCount: tasks.length, status: "sent" });
-        console.log(`Digest sent for assignee ${assigneeId}`);
+        publishResults.push({
+          assigneeId,
+          taskCount: tasks.length,
+          status: "sent",
+        });
+        console.log(`Digest published for assignee ${assigneeId}`);
       } catch (err) {
-        console.error(`Failed to send digest for assignee ${assigneeId}: ${err.message}`);
-        publishResults.push({ assigneeId, status: "failed", error: err.message });
+        console.error(
+          `Failed to publish digest for assignee ${assigneeId}: ${err.message}`,
+        );
+        publishResults.push({
+          assigneeId,
+          status: "failed",
+          error: err.message,
+        });
       }
     }
 
-    console.log("Daily digest published successfully");
+    console.log("Daily digests published to SNS successfully");
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Daily digests sent",
+        message: "Daily digests published (filtered by assigneeId)",
         totalTasks: dueTodayTasks.length,
         results: publishResults,
       }),

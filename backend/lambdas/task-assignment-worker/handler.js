@@ -1,12 +1,20 @@
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { CloudWatchClient, PutMetricDataCommand } from "@aws-sdk/client-cloudwatch";
+import {
+  CloudWatchClient,
+  PutMetricDataCommand,
+} from "@aws-sdk/client-cloudwatch";
 
-const dynamoDB = DynamoDBDocumentClient.from(new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" }), {
-  marshallOptions: { removeUndefinedValues: true },
+const dynamoDB = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" }),
+  {
+    marshallOptions: { removeUndefinedValues: true },
+  },
+);
+
+const cloudwatch = new CloudWatchClient({
+  region: process.env.AWS_REGION || "us-east-1",
 });
-
-const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || "us-east-1" });
 
 /**
  * Lambda handler: Assignment Worker
@@ -16,10 +24,27 @@ const cloudwatch = new CloudWatchClient({ region: process.env.AWS_REGION || "us-
  * (Email notifications are sent by email-notifier Lambda via SNS)
  */
 export const handler = async (event) => {
-  console.log("Assignment Worker Lambda triggered:", JSON.stringify(event, null, 2));
+  console.log(
+    "Assignment Worker Lambda triggered:",
+    JSON.stringify(event, null, 2),
+  );
 
   try {
     const results = [];
+
+    if (!Array.isArray(event?.Records) || event.Records.length === 0) {
+      console.warn(
+        "Expected an SQS event with Records. This Lambda is not meant for raw manual test payloads.",
+      );
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message:
+            "No SQS records found. Send an SQS test event to exercise this Lambda.",
+          hint: "Use the SQS event template in the Lambda console instead of a plain JSON object.",
+        }),
+      };
+    }
 
     // Drain SQS queue
     for (const record of event.Records) {
@@ -36,21 +61,27 @@ export const handler = async (event) => {
 
         const { taskId, assigneeId, title, timestamp } = message;
 
-        console.log(`Processing assignment: taskId=${taskId}, assigneeId=${assigneeId}`);
+        console.log(
+          `Processing assignment: taskId=${taskId}, assigneeId=${assigneeId}`,
+        );
 
         // Fetch task and assignee data
         let task, assignee;
         try {
-          const taskResp = await dynamoDB.send(new GetCommand({
-            TableName: "Tasks",
-            Key: { taskId },
-          }));
+          const taskResp = await dynamoDB.send(
+            new GetCommand({
+              TableName: "Tasks",
+              Key: { taskId },
+            }),
+          );
           task = taskResp.Item;
 
-          const userResp = await dynamoDB.send(new GetCommand({
-            TableName: "Users",
-            Key: { userId: assigneeId },
-          }));
+          const userResp = await dynamoDB.send(
+            new GetCommand({
+              TableName: "Users",
+              Key: { userId: assigneeId },
+            }),
+          );
           assignee = userResp.Item;
         } catch (err) {
           console.error(`Failed to fetch data: ${err.message}`);

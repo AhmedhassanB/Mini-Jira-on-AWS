@@ -18,6 +18,19 @@ import { v4 as uuidv4 } from "uuid";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import s3 from "../config/s3.js";
 
+const usersTableName = process.env.USERS_TABLE_NAME || "Users";
+
+async function getUserNotificationTopicArn(userId) {
+  const resp = await dynamoDB.send(
+    new GetCommand({
+      TableName: usersTableName,
+      Key: { userId },
+    }),
+  );
+
+  return resp.Item?.snsTopicArn || resp.Item?.notificationTopicArn || null;
+}
+
 // TEST REGION
 export const testRegion = async (req, res) => {
   res.json({
@@ -127,10 +140,10 @@ export const createTask = async (req, res) => {
     // If assigneeId was provided at creation, publish to SNS for task assignment workflow
     if (assigneeId) {
       try {
-        const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+        const topicArn = await getUserNotificationTopicArn(assigneeId);
         if (topicArn) {
           console.log(
-            `Publishing task assignment event for task ${taskId} to assignee ${assigneeId}`,
+            `Publishing task assignment event for task ${taskId} to assignee ${assigneeId} via ${topicArn}`,
           );
           await sns.send(
             new PublishCommand({
@@ -142,7 +155,21 @@ export const createTask = async (req, res) => {
                 timestamp: new Date().toISOString(),
               }),
               Subject: "Task Assignment Notification",
+              MessageAttributes: {
+                assigneeId: {
+                  DataType: "String",
+                  StringValue: assigneeId,
+                },
+                eventType: {
+                  DataType: "String",
+                  StringValue: "TASK_ASSIGNMENT",
+                },
+              },
             }),
+          );
+        } else {
+          console.warn(
+            `No SNS topic found for assignee ${assigneeId}; task assignment email/event will not be published for task ${taskId}`,
           );
         }
       } catch (err) {
@@ -177,7 +204,9 @@ export const getAllTasks = async (req, res) => {
 
     if (!isPrivileged) {
       if (!employeeTeamId) {
-        return res.status(403).json({ error: "Employee account has no team assigned" });
+        return res
+          .status(403)
+          .json({ error: "Employee account has no team assigned" });
       }
       const data = await dynamoDB.send(
         new QueryCommand({
@@ -217,7 +246,9 @@ export const getTaskById = async (req, res) => {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
     const isPrivileged = role === "manager" || role === "admin";
     if (!isPrivileged && data.Item.teamId !== req.user.teamId) {
-      return res.status(403).json({ error: "Access denied: task belongs to a different team" });
+      return res
+        .status(403)
+        .json({ error: "Access denied: task belongs to a different team" });
     }
 
     res.json(data.Item);
@@ -240,16 +271,23 @@ export const deleteTask = async (req, res) => {
         KeyConditionExpression: "taskId = :taskId",
         ExpressionAttributeValues: { ":taskId": taskId },
         ProjectionExpression: "taskId, commentId",
-      })
+      }),
     );
 
     await Promise.all(
       comments.map((c) =>
-        dynamoDB.send(new DeleteCommand({ TableName: commentsTable, Key: { taskId: c.taskId, commentId: c.commentId } }))
-      )
+        dynamoDB.send(
+          new DeleteCommand({
+            TableName: commentsTable,
+            Key: { taskId: c.taskId, commentId: c.commentId },
+          }),
+        ),
+      ),
     );
 
-    await dynamoDB.send(new DeleteCommand({ TableName: "Tasks", Key: { taskId } }));
+    await dynamoDB.send(
+      new DeleteCommand({ TableName: "Tasks", Key: { taskId } }),
+    );
 
     res.json({ message: "Task deleted" });
   } catch (error) {
@@ -346,10 +384,10 @@ export const updateTask = async (req, res) => {
     // If assigneeId was updated, publish to SNS for task assignment workflow
     if (req.body.assigneeId !== undefined) {
       try {
-        const topicArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
+        const topicArn = await getUserNotificationTopicArn(req.body.assigneeId);
         if (topicArn) {
           console.log(
-            `Publishing task assignment event for task ${taskId} to assignee ${req.body.assigneeId}`,
+            `Publishing task assignment event for task ${taskId} to assignee ${req.body.assigneeId} via ${topicArn}`,
           );
           await sns.send(
             new PublishCommand({
@@ -361,7 +399,21 @@ export const updateTask = async (req, res) => {
                 timestamp: new Date().toISOString(),
               }),
               Subject: "Task Assignment Notification",
+              MessageAttributes: {
+                assigneeId: {
+                  DataType: "String",
+                  StringValue: req.body.assigneeId,
+                },
+                eventType: {
+                  DataType: "String",
+                  StringValue: "TASK_ASSIGNMENT",
+                },
+              },
             }),
+          );
+        } else {
+          console.warn(
+            `No SNS topic found for assignee ${req.body.assigneeId}; task assignment email/event will not be published for task ${taskId}`,
           );
         }
       } catch (err) {
@@ -402,7 +454,12 @@ export const getTasksByTeam = async (req, res) => {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
     const isPrivileged = role === "manager" || role === "admin";
     if (!isPrivileged && req.params.teamId !== req.user.teamId) {
-      return res.status(403).json({ error: "Access denied: employees may only view their own team's tasks" });
+      return res
+        .status(403)
+        .json({
+          error:
+            "Access denied: employees may only view their own team's tasks",
+        });
     }
 
     const data = await dynamoDB.send(
@@ -430,7 +487,12 @@ export const getTasksByAssignee = async (req, res) => {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
     const isPrivileged = role === "manager" || role === "admin";
     if (!isPrivileged && req.params.assigneeId !== req.user.sub) {
-      return res.status(403).json({ error: "Access denied: employees may only view their own assigned tasks" });
+      return res
+        .status(403)
+        .json({
+          error:
+            "Access denied: employees may only view their own assigned tasks",
+        });
     }
 
     const data = await dynamoDB.send(
@@ -460,7 +522,9 @@ export const getTasksByProject = async (req, res) => {
     const employeeTeamId = req.user?.teamId;
 
     if (!isPrivileged && !employeeTeamId) {
-      return res.status(403).json({ error: "Employee account has no team assigned" });
+      return res
+        .status(403)
+        .json({ error: "Employee account has no team assigned" });
     }
 
     const query = {

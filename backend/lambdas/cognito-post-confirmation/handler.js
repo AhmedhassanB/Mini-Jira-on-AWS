@@ -1,16 +1,27 @@
-import { SNSClient, SubscribeCommand } from "@aws-sdk/client-sns";
+import {
+  SNSClient,
+  CreateTopicCommand,
+  SubscribeCommand,
+} from "@aws-sdk/client-sns";
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 
-const snsClient = new SNSClient({ region: process.env.AWS_REGION || "us-east-1" });
-const dynamoDB = DynamoDBDocumentClient.from(new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" }), {
-  marshallOptions: { removeUndefinedValues: true },
+const snsClient = new SNSClient({
+  region: process.env.AWS_REGION || "us-east-1",
 });
+const dynamoDB = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: process.env.AWS_REGION || "us-east-1" }),
+  {
+    marshallOptions: { removeUndefinedValues: true },
+  },
+);
 
 /**
  * Cognito Post-Confirmation Lambda
  * - Triggered after user confirms email in Cognito
- * - Auto-subscribes email to SNS task-assignments topic
+ * - Creates a dedicated SNS topic per user
+ * - Auto-subscribes email to that topic
+ * - Stores the user's topic ARN in DynamoDB for targeted notifications
  * - Updates Users table to mark email as verified
  */
 export const handler = async (event) => {
@@ -20,80 +31,81 @@ export const handler = async (event) => {
     // Extract user info from Cognito event
     const userId = event.request.userAttributes.sub;
     const email = event.request.userAttributes.email;
-    const username = event.request.userAttributes.preferred_username || event.userName;
+    const username =
+      event.request.userAttributes.preferred_username || event.userName;
 
     if (!email) {
       console.warn("No email found in Cognito user attributes");
       return event;
     }
 
-    console.log(`User confirmed: userId=${userId}, email=${email}, username=${username}`);
+    console.log(
+      `User confirmed: userId=${userId}, email=${email}, username=${username}`,
+    );
 
-    // Auto-subscribe email to SNS task-assignments topic
-    console.log(`Subscribing email to SNS task-assignments topic: ${email}`);
-    try {
-      const taskAssignmentsArn = process.env.SNS_TASK_ASSIGNMENTS_TOPIC_ARN;
-      if (!taskAssignmentsArn) {
-        console.warn("SNS_TASK_ASSIGNMENTS_TOPIC_ARN not configured");
-      } else {
-        await snsClient.send(
-          new SubscribeCommand({
-            TopicArn: taskAssignmentsArn,
-            Protocol: "email",
-            Endpoint: email,
-          }),
-        );
-        console.log(`Email ${email} subscribed to task-assignments topic`);
-      }
-    } catch (snsErr) {
-      console.error(`Failed to subscribe to task-assignments: ${snsErr.message}`);
-      // Continue anyway
-    }
+    // Create/get a dedicated SNS topic for this user
+    const userTopicName = `mini-jira-user-${userId}`;
+    let userTopicArn = null;
 
-    // Auto-subscribe email to SNS daily-digest topic
-    console.log(`Subscribing email to SNS daily-digest topic: ${email}`);
     try {
-      const dailyDigestArn = process.env.SNS_DAILY_DIGEST_TOPIC_ARN;
-      if (!dailyDigestArn) {
-        console.warn("SNS_DAILY_DIGEST_TOPIC_ARN not configured");
-      } else {
-        await snsClient.send(
-          new SubscribeCommand({
-            TopicArn: dailyDigestArn,
-            Protocol: "email",
-            Endpoint: email,
-          }),
-        );
-        console.log(`Email ${email} subscribed to daily-digest topic`);
-      }
-    } catch (snsErr) {
-      console.error(`Failed to subscribe to daily-digest: ${snsErr.message}`);
-      // Continue anyway
-    }
-
-    // Update Users table to mark email as verified
-    try {
-      await dynamoDB.send(
-        new UpdateCommand({
-          TableName: "Users",
-          Key: { userId },
-          UpdateExpression: "SET #email = :email, #emailVerified = :verified, #updatedAt = :ts",
-          ExpressionAttributeNames: {
-            "#email": "email",
-            "#emailVerified": "emailVerified",
-            "#updatedAt": "updatedAt",
-          },
-          ExpressionAttributeValues: {
-            ":email": email,
-            ":verified": true,
-            ":ts": new Date().toISOString(),
+      const createTopicResp = await snsClient.send(
+        new CreateTopicCommand({
+          Name: userTopicName,
+          Attributes: {
+            DisplayName: `Mini Jira ${username || "User"}`,
           },
         }),
       );
-      console.log(`Updated Users table: userId=${userId}, email=${email}, emailVerified=true`);
-    } catch (dbErr) {
-      console.error(`Failed to update Users table: ${dbErr.message}`);
-      // Continue anyway; user is confirmed in Cognito
+      userTopicArn = createTopicResp.TopicArn;
+      console.log(`Created/loaded user SNS topic: ${userTopicArn}`);
+
+      const subscribeResp = await snsClient.send(
+        new SubscribeCommand({
+          TopicArn: userTopicArn,
+          Protocol: "email",
+          Endpoint: email,
+        }),
+      );
+      console.log(
+        `Email ${email} subscribed to user topic (arn: ${subscribeResp.SubscriptionArn})`,
+      );
+    } catch (snsErr) {
+      console.error(
+        `Failed to create/subscribe user SNS topic: ${snsErr.message}`,
+      );
+      // Continue anyway
+    }
+
+    try {
+      // Save the topic ARN on the user record so publishers can target this user directly
+      if (userTopicArn) {
+        await dynamoDB.send(
+          new UpdateCommand({
+            TableName: "Users",
+            Key: { userId },
+            UpdateExpression:
+              "SET #email = :email, #emailVerified = :verified, #snsTopicArn = :snsTopicArn, #updatedAt = :ts",
+            ExpressionAttributeNames: {
+              "#email": "email",
+              "#emailVerified": "emailVerified",
+              "#snsTopicArn": "snsTopicArn",
+              "#updatedAt": "updatedAt",
+            },
+            ExpressionAttributeValues: {
+              ":email": email,
+              ":verified": true,
+              ":snsTopicArn": userTopicArn,
+              ":ts": new Date().toISOString(),
+            },
+          }),
+        );
+      }
+      console.log(
+        `Updated Users table: userId=${userId}, email=${email}, snsTopicArn=${userTopicArn || "n/a"}`,
+      );
+    } catch (snsErr) {
+      console.error(`Failed to subscribe user SNS topic: ${snsErr.message}`);
+      // Continue anyway
     }
 
     console.log("Post-confirmation processing completed successfully");
