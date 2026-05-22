@@ -24,15 +24,28 @@ const getAuthor = (req) => {
 export const createComment = async (req, res) => {
   try {
     const { id } = req.params; // Expecting /tasks/:id/comments
-    const taskId = id ; 
+    const taskId = id;
     const { text, attachments } = req.body;
 
     const auth = getAuthor(req);
 
     if (!taskId || !text) {
-      return res.status(400).json({
-        error: "taskId and text are required fields",
-      });
+      return res.status(400).json({ error: "taskId and text are required fields" });
+    }
+
+    // Enforce team membership for non-privileged users
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
+    if (!isPrivileged) {
+      const taskResult = await dynamoDB.send(
+        new GetCommand({ TableName: process.env.TASKS_TABLE_NAME || "Tasks", Key: { taskId } })
+      );
+      if (!taskResult.Item) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      if (taskResult.Item.teamId !== req.user?.teamId) {
+        return res.status(403).json({ error: "Access denied: task belongs to a different team" });
+      }
     }
 
     const commentId = uuidv4();
@@ -82,21 +95,30 @@ export const getCommentsByTask = async (req, res) => {
     const { id } = req.params;
     const taskId = id;
     if (!taskId) {
-      return res.status(400).json({
-        error: "taskId is required",
-      });
+      return res.status(400).json({ error: "taskId is required" });
     }
 
-    const cmd = new QueryCommand({
+    // Enforce team membership for non-privileged users
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
+    if (!isPrivileged) {
+      const taskResult = await dynamoDB.send(
+        new GetCommand({ TableName: process.env.TASKS_TABLE_NAME || "Tasks", Key: { taskId } })
+      );
+      if (!taskResult.Item) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      if (taskResult.Item.teamId !== req.user?.teamId) {
+        return res.status(403).json({ error: "Access denied: task belongs to a different team" });
+      }
+    }
+
+    const result = await dynamoDB.send(new QueryCommand({
       TableName: commentsTableName,
       KeyConditionExpression: "taskId = :taskId",
-      ExpressionAttributeValues: {
-        ":taskId": taskId,
-      },
-      ScanIndexForward: false, 
-    });
-
-    const result = await dynamoDB.send(cmd);
+      ExpressionAttributeValues: { ":taskId": taskId },
+      ScanIndexForward: false,
+    }));
 
     return res.json({
       message: "Comments retrieved successfully",

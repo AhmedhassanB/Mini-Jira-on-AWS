@@ -12,6 +12,7 @@ import oidcRoute from "./routes/oidc.js";
 import taskRoutes from "./routes/taskRoutes.js";
 import projectRoutes from "./routes/projectRoutes.js";
 import teamRoutes from "./routes/teamRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 import dynamoDB from "./config/dynamodb.js";
 import { ListTablesCommand } from "@aws-sdk/client-dynamodb";
 
@@ -48,6 +49,7 @@ app.use("/oidc", oidcRoute);
 app.use("/api/tasks", taskRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/teams", teamRoutes);
+app.use("/api/users", userRoutes);
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", env: process.env.NODE_ENV });

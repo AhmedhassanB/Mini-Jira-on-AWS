@@ -10,8 +10,7 @@ const dynamoDB = DynamoDBDocumentClient.from(new DynamoDBClient({ region: proces
 
 const RESIZED_BUCKET = process.env.S3_BUCKET_RESIZED || "mini-jira-resized";
 const THUMBNAIL_SIZES = [
-  { name: "thumbnail-100", width: 100, height: 100 },
-  { name: "thumbnail-300", width: 300, height: 300 },
+  { name: "thumbnail-600x300", width: 600, height: 300 },
 ];
 
 /**
@@ -76,8 +75,10 @@ export const handler = async (event) => {
       for (const size of THUMBNAIL_SIZES) {
         try {
           console.log(`Generating ${size.name} (${size.width}x${size.height})`);
-          // Use fit: "inside" to maintain aspect ratio without cropping
-          const resizedBuffer = await sharp(imageBuffer).resize(size.width, size.height, { fit: "inside" }).toBuffer();
+          // Use fit: "cover" to force exact output dimensions (600x300)
+          const resizedBuffer = await sharp(imageBuffer)
+            .resize(size.width, size.height, { fit: "cover", position: "center" })
+            .toBuffer();
 
           const thumbnailKey = `tasks/${taskId}/${size.name}.${ext}`;
           console.log(`Uploading to S3: ${thumbnailKey}`);
@@ -119,7 +120,7 @@ export const handler = async (event) => {
         continue;
       }
 
-      // Update Tasks table with smallest thumbnail URL and replace imageUrl with resized version
+      // Update Tasks table with the generated resized image URL
       if (thumbnailUrls.length > 0) {
         try {
           console.log(`Updating Tasks table for taskId ${taskId}`);
@@ -129,8 +130,8 @@ export const handler = async (event) => {
               Key: { taskId },
               UpdateExpression: "SET imageUrl = :imageUrl, thumbnailUrl = :thumbnailUrl, updatedAt = :updatedAt",
               ExpressionAttributeValues: {
-                ":imageUrl": thumbnailUrls[0], // Replace original imageUrl with resized thumbnail (100x100)
-                ":thumbnailUrl": thumbnailUrls[0], // Use the smallest thumbnail as default
+                ":imageUrl": thumbnailUrls[0], // Replace original imageUrl with resized image (600x300)
+                ":thumbnailUrl": thumbnailUrls[0], // Use resized image as thumbnail URL
                 ":updatedAt": new Date().toISOString(),
               },
               ReturnValues: "ALL_NEW",

@@ -41,9 +41,9 @@ function StatCard({ label, value, icon: Icon, color, sub }) {
 
 export default function Dashboard() {
   const { user } = useAuthStore()
-  const { data: tasks = [], isLoading } = useTasks(
-    user?.role === 'Employee' && user?.teamId ? { teamId: user.teamId } : {}
-  )
+  const role = user?.role?.toLowerCase()
+  const isManager = role === 'manager' || role === 'admin'
+  const { data: tasks = [], isLoading } = useTasks()
 
   if (isLoading) return <DashboardSkeleton />
 
@@ -70,13 +70,13 @@ export default function Dashboard() {
       <PageHeader
         title={`${greeting()}, ${displayName(user)} 👋`}
         description="Here's what's happening with your projects today."
-        action={
+        action={isManager && (
           <Link to="/kanban">
             <Button size="sm">
               <Plus size={16} /> New Task
             </Button>
           </Link>
-        }
+        )}
       />
 
       {/* Stat cards */}

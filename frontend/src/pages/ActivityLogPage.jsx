@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Activity, CheckCircle, Plus, Edit, Trash2 } from 'lucide-react'
+import { Activity, Plus } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import PageHeader from '@/components/common/PageHeader'
@@ -8,9 +8,11 @@ import EmptyState from '@/components/common/EmptyState'
 import StatusBadge from '@/components/common/StatusBadge'
 import PriorityBadge from '@/components/common/PriorityBadge'
 import { useTasks } from '@/hooks/useTasks'
-import { timeAgo, formatDateTime } from '@/utils/helpers'
+import { useTeams } from '@/hooks/useTeams'
+import { useUsers } from '@/hooks/useUsers'
+import { timeAgo } from '@/utils/helpers'
 
-function ActivityItem({ task, index }) {
+function ActivityItem({ task, teamName, assigneeName, index }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -18,7 +20,6 @@ function ActivityItem({ task, index }) {
       transition={{ delay: index * 0.03 }}
       className="flex gap-3 group"
     >
-      {/* Timeline */}
       <div className="flex flex-col items-center">
         <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
           <Plus size={14} className="text-primary" />
@@ -26,7 +27,6 @@ function ActivityItem({ task, index }) {
         <div className="w-px flex-1 bg-border mt-2" />
       </div>
 
-      {/* Content */}
       <div className="flex-1 pb-4">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -44,8 +44,8 @@ function ActivityItem({ task, index }) {
           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{task.description}</p>
         )}
         <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-          {task.assignee && <span>Assigned to {task.assignee}</span>}
-          {task.teamId && <Badge variant="outline" className="text-[10px] py-0">{task.teamId}</Badge>}
+          {assigneeName && <span>Assigned by {assigneeName}</span>}
+          {teamName && <Badge variant="outline" className="text-[10px] py-0">{teamName}</Badge>}
         </div>
       </div>
     </motion.div>
@@ -54,11 +54,16 @@ function ActivityItem({ task, index }) {
 
 export default function ActivityLogPage() {
   const { data: tasks = [], isLoading } = useTasks()
+  const { data: teams = [] } = useTeams()
+  const { data: users = [] } = useUsers()
 
   const sorted = useMemo(() =>
     [...tasks].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
     [tasks]
   )
+
+  const teamMap = useMemo(() => Object.fromEntries(teams.map((t) => [t.teamId, t.name])), [teams])
+  const userMap = useMemo(() => Object.fromEntries(users.map((u) => [u.userId, u.username || u.email])), [users])
 
   return (
     <div className="animate-fade-in">
@@ -92,7 +97,13 @@ export default function ActivityLogPage() {
       ) : (
         <div className="max-w-2xl">
           {sorted.map((task, i) => (
-            <ActivityItem key={task.taskId} task={task} index={i} />
+            <ActivityItem
+              key={task.taskId}
+              task={task}
+              index={i}
+              teamName={task.teamId ? teamMap[task.teamId] : null}
+              assigneeName={task.assigneeName || (task.assigneeId ? userMap[task.assigneeId] : null)}
+            />
           ))}
         </div>
       )}

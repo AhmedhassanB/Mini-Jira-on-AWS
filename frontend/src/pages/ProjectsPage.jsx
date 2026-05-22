@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, FolderKanban, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,15 +27,21 @@ function ProjectModal({ open, onOpenChange, project }) {
   const isEdit = !!project
   const { user } = useAuthStore()
   const { data: teams = [] } = useTeams()
-  const [form, setForm] = useState({
-    name: project?.name || '',
-    description: project?.description || '',
-    teamId: project?.teamId || '',
-  })
+  const [form, setForm] = useState({ name: '', description: '', teamId: '' })
   const create = useCreateProject()
   const update = useUpdateProject()
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const isPending = create.isPending || update.isPending
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        name: project?.name || '',
+        description: project?.description || '',
+        teamId: project?.teamId || '',
+      })
+    }
+  }, [open, project])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -91,8 +97,7 @@ function ProjectModal({ open, onOpenChange, project }) {
   )
 }
 
-function ProjectCard({ project, onEdit, onDelete }) {
-  const { data: tasks = [] } = useTasks({ projectId: project.projectId })
+function ProjectCard({ project, tasks, teamName, onEdit, onDelete, isManager }) {
   const done = tasks.filter((t) => t.status === 'Done').length
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0
 
@@ -107,14 +112,16 @@ function ProjectCard({ project, onEdit, onDelete }) {
               </div>
               <CardTitle className="text-base">{project.name}</CardTitle>
             </div>
-            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(project)}>
-                <Pencil size={13} />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(project)}>
-                <Trash2 size={13} />
-              </Button>
-            </div>
+            {isManager && (
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(project)}>
+                  <Pencil size={13} />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(project)}>
+                  <Trash2 size={13} />
+                </Button>
+              </div>
+            )}
           </div>
           {project.description && (
             <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{project.description}</p>
@@ -128,7 +135,7 @@ function ProjectCard({ project, onEdit, onDelete }) {
           <Progress value={progress} className="h-1.5" />
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs">{progress}% done</Badge>
-            {project.teamId && <Badge variant="secondary" className="text-xs">Team: {project.teamId}</Badge>}
+            {teamName && <Badge variant="secondary" className="text-xs">{teamName}</Badge>}
           </div>
         </CardContent>
       </Card>
@@ -137,11 +144,17 @@ function ProjectCard({ project, onEdit, onDelete }) {
 }
 
 export default function ProjectsPage() {
+  const { user } = useAuthStore()
+  const isManager = user?.role?.toLowerCase() === 'manager'
   const { data: projects = [], isLoading } = useProjects()
+  const { data: allTasks = [] } = useTasks()
+  const { data: teams = [] } = useTeams()
   const deleteProject = useDeleteProject()
   const [modalOpen, setModalOpen] = useState(false)
   const [editProject, setEditProject] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+
+  const teamMap = useMemo(() => Object.fromEntries(teams.map((t) => [t.teamId, t.name])), [teams])
 
   const handleEdit = (project) => { setEditProject(project); setModalOpen(true) }
   const handleDelete = (project) => setDeleteTarget(project)
@@ -154,11 +167,11 @@ export default function ProjectsPage() {
       <PageHeader
         title="Projects"
         description="Manage your projects and track task progress."
-        action={
+        action={isManager && (
           <Button size="sm" onClick={() => { setEditProject(null); setModalOpen(true) }}>
             <Plus size={16} /> New Project
           </Button>
-        }
+        )}
       />
 
       {isLoading ? (
@@ -170,12 +183,20 @@ export default function ProjectsPage() {
           icon={FolderKanban}
           title="No projects yet"
           description="Create your first project to organize tasks."
-          action={<Button onClick={() => setModalOpen(true)}><Plus size={16} /> Create Project</Button>}
+          action={isManager && <Button onClick={() => setModalOpen(true)}><Plus size={16} /> Create Project</Button>}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((p) => (
-            <ProjectCard key={p.projectId} project={p} onEdit={handleEdit} onDelete={handleDelete} />
+            <ProjectCard
+              key={p.projectId}
+              project={p}
+              tasks={allTasks.filter((t) => t.projectId === p.projectId)}
+              teamName={p.teamId ? teamMap[p.teamId] : null}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              isManager={isManager}
+            />
           ))}
         </div>
       )}

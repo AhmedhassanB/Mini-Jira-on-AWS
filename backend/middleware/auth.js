@@ -61,7 +61,26 @@ export function requireManager(req, res, next) {
   return res.status(403).json({ error: "Requires Manager role" });
 }
 
+// Admin is the only role that can create/update/delete teams and add users to teams
+export function requireAdmin(req, res, next) {
+  if (req.user && req.user.role && String(req.user.role).toLowerCase() === "admin") {
+    return next();
+  }
+  return res.status(403).json({ error: "Requires Admin role" });
+}
+
+// Read-only operations visible to both managers and admins (e.g. listing users to display team members)
+export function requireManagerOrAdmin(req, res, next) {
+  const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+  if (role === "manager" || role === "admin") {
+    return next();
+  }
+  return res.status(403).json({ error: "Requires Manager or Admin role" });
+}
+
 export default {
   authMiddleware,
   requireManager,
+  requireAdmin,
+  requireManagerOrAdmin,
 };

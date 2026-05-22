@@ -17,12 +17,14 @@ export default function KanbanColumn({ column, tasks, onAddTask, onTaskClick }) 
             {tasks.length}
           </span>
         </div>
-        <button
-          onClick={() => onAddTask?.(column.id)}
-          className="text-muted-foreground hover:text-foreground hover:bg-accent p-1 rounded transition-colors"
-        >
-          <Plus size={16} />
-        </button>
+        {onAddTask && (
+          <button
+            onClick={() => onAddTask(column.id)}
+            className="text-muted-foreground hover:text-foreground hover:bg-accent p-1 rounded transition-colors"
+          >
+            <Plus size={16} />
+          </button>
+        )}
       </div>
 
       <div
