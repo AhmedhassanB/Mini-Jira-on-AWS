@@ -42,9 +42,10 @@ export const createProject = async (req, res) => {
 export const getAllProjects = async (req, res) => {
   try {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
     const employeeTeamId = req.user?.teamId;
 
-    if (role === "employee") {
+    if (!isPrivileged) {
       if (!employeeTeamId) {
         return res.status(403).json({ error: "Employee account has no team assigned" });
       }
@@ -84,7 +85,8 @@ export const getProjectById = async (req, res) => {
     }
 
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
-    if (role === "employee" && data.Item.teamId !== req.user.teamId) {
+    const isPrivileged = role === "manager" || role === "admin";
+    if (!isPrivileged && data.Item.teamId !== req.user.teamId) {
       return res.status(403).json({ error: "Access denied: project belongs to a different team" });
     }
 

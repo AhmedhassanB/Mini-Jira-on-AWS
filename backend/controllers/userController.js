@@ -49,3 +49,26 @@ export const assignUserToTeam = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// DELETE /api/users/:userId/team — admin only; removes a user from their team
+export const removeUserFromTeam = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    await dynamoDB.send(
+      new UpdateCommand({
+        TableName: usersTableName,
+        Key: { userId },
+        UpdateExpression: "REMOVE teamId SET updatedAt = :updatedAt",
+        ExpressionAttributeValues: {
+          ":updatedAt": new Date().toISOString(),
+        },
+      })
+    );
+
+    res.json({ message: "User removed from team", userId });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};

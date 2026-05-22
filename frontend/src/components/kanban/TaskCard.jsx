@@ -40,10 +40,10 @@ export function TaskCard({ task, isDragging, onClick }) {
 
       <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
         <div className="flex items-center gap-2">
-          {task.assignee && (
-            <Avatar className="h-5 w-5">
+          {task.assigneeName && (
+            <Avatar className="h-5 w-5" title={task.assigneeName}>
               <AvatarFallback className="text-[9px]">
-                {getInitials(task.assignee)}
+                {getInitials(task.assigneeName)}
               </AvatarFallback>
             </Avatar>
           )}

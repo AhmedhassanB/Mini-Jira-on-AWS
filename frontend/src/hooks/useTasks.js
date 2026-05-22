@@ -1,14 +1,24 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { taskService } from '@/services/taskService'
+import { useAuthStore } from '@/store/authStore'
 
 export function useTasks(filters = {}) {
+  const user = useAuthStore((s) => s.user)
+  const role = user?.role?.toLowerCase()
+
+  // Employees are always scoped to their own team regardless of what the caller passes
+  const effectiveFilters =
+    role === 'employee' && user?.teamId
+      ? { ...filters, teamId: user.teamId }
+      : filters
+
   return useQuery({
-    queryKey: ['tasks', filters],
+    queryKey: ['tasks', effectiveFilters],
     queryFn: () => {
-      if (filters.teamId) return taskService.getByTeam(filters.teamId)
-      if (filters.projectId) return taskService.getByProject(filters.projectId)
-      if (filters.assigneeId) return taskService.getByAssignee(filters.assigneeId)
+      if (effectiveFilters.teamId) return taskService.getByTeam(effectiveFilters.teamId)
+      if (effectiveFilters.projectId) return taskService.getByProject(effectiveFilters.projectId)
+      if (effectiveFilters.assigneeId) return taskService.getByAssignee(effectiveFilters.assigneeId)
       return taskService.getAll()
     },
     select: (data) => (Array.isArray(data) ? data : data?.tasks ?? []),

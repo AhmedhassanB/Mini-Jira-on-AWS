@@ -160,9 +160,10 @@ export const createTask = async (req, res) => {
 export const getAllTasks = async (req, res) => {
   try {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
     const employeeTeamId = req.user?.teamId;
 
-    if (role === "employee") {
+    if (!isPrivileged) {
       if (!employeeTeamId) {
         return res.status(403).json({ error: "Employee account has no team assigned" });
       }
@@ -202,7 +203,8 @@ export const getTaskById = async (req, res) => {
     }
 
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
-    if (role === "employee" && data.Item.teamId !== req.user.teamId) {
+    const isPrivileged = role === "manager" || role === "admin";
+    if (!isPrivileged && data.Item.teamId !== req.user.teamId) {
       return res.status(403).json({ error: "Access denied: task belongs to a different team" });
     }
 
@@ -213,28 +215,34 @@ export const getTaskById = async (req, res) => {
   }
 };
 
-// DELETE TASK
+// DELETE TASK — also removes all comments belonging to the task
 export const deleteTask = async (req, res) => {
   try {
-    await dynamoDB.send(
-      new DeleteCommand({
-        TableName: "Tasks",
+    const taskId = req.params.id;
+    const commentsTable = process.env.COMMENTS_TABLE_NAME || "Comments";
 
-        Key: {
-          taskId: req.params.id,
-        },
-      }),
+    // Fetch all comments for this task then delete them
+    const { Items: comments = [] } = await dynamoDB.send(
+      new QueryCommand({
+        TableName: commentsTable,
+        KeyConditionExpression: "taskId = :taskId",
+        ExpressionAttributeValues: { ":taskId": taskId },
+        ProjectionExpression: "taskId, commentId",
+      })
     );
 
-    res.json({
-      message: "Task deleted",
-    });
+    await Promise.all(
+      comments.map((c) =>
+        dynamoDB.send(new DeleteCommand({ TableName: commentsTable, Key: { taskId: c.taskId, commentId: c.commentId } }))
+      )
+    );
+
+    await dynamoDB.send(new DeleteCommand({ TableName: "Tasks", Key: { taskId } }));
+
+    res.json({ message: "Task deleted" });
   } catch (error) {
     console.log(error);
-
-    res.status(500).json({
-      error: error.message,
-    });
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -278,9 +286,10 @@ export const updateTask = async (req, res) => {
   try {
     const taskId = req.params.id;
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
 
     // Employees may only change the status field; all other fields are manager-only
-    if (role === "employee") {
+    if (!isPrivileged) {
       const attemptedFields = Object.keys(req.body).filter((f) => f !== "status");
       if (attemptedFields.length > 0) {
         return res.status(403).json({
@@ -382,7 +391,8 @@ export const updateTask = async (req, res) => {
 export const getTasksByTeam = async (req, res) => {
   try {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
-    if (role === "employee" && req.params.teamId !== req.user.teamId) {
+    const isPrivileged = role === "manager" || role === "admin";
+    if (!isPrivileged && req.params.teamId !== req.user.teamId) {
       return res.status(403).json({ error: "Access denied: employees may only view their own team's tasks" });
     }
 
@@ -409,7 +419,8 @@ export const getTasksByTeam = async (req, res) => {
 export const getTasksByAssignee = async (req, res) => {
   try {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
-    if (role === "employee" && req.params.assigneeId !== req.user.sub) {
+    const isPrivileged = role === "manager" || role === "admin";
+    if (!isPrivileged && req.params.assigneeId !== req.user.sub) {
       return res.status(403).json({ error: "Access denied: employees may only view their own assigned tasks" });
     }
 
@@ -436,9 +447,10 @@ export const getTasksByAssignee = async (req, res) => {
 export const getTasksByProject = async (req, res) => {
   try {
     const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
     const employeeTeamId = req.user?.teamId;
 
-    if (role === "employee" && !employeeTeamId) {
+    if (!isPrivileged && !employeeTeamId) {
       return res.status(403).json({ error: "Employee account has no team assigned" });
     }
 
@@ -449,7 +461,7 @@ export const getTasksByProject = async (req, res) => {
       ExpressionAttributeValues: { ":projectId": req.params.projectId },
     };
 
-    if (role === "employee") {
+    if (!isPrivileged) {
       query.FilterExpression = "teamId = :teamId";
       query.ExpressionAttributeValues[":teamId"] = employeeTeamId;
     }

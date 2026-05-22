@@ -3,7 +3,6 @@ import {
   DndContext, DragOverlay, closestCenter,
   PointerSensor, useSensor, useSensors,
 } from '@dnd-kit/core'
-import { arrayMove } from '@dnd-kit/sortable'
 import KanbanColumn from './KanbanColumn'
 import { TaskCard } from './TaskCard'
 import { useUpdateTask } from '@/hooks/useTasks'
@@ -32,23 +31,18 @@ export default function KanbanBoard({ tasks = [], onTaskClick, onAddTask }) {
     setActiveTask(null)
     if (!over) return
 
-    const newStatus = over.id
-    const isColumn = KANBAN_COLUMNS.some((c) => c.id === newStatus)
-    if (!isColumn) return
-
     const task = tasks.find((t) => t.taskId === active.id)
-    if (task && task.status !== newStatus) {
-      updateTask.mutate({ id: task.taskId, status: newStatus })
-    }
-  }
+    if (!task) return
 
-  const handleDragOver = ({ active, over }) => {
-    if (!over) return
-    const activeTask = tasks.find((t) => t.taskId === active.id)
-    const overTask = tasks.find((t) => t.taskId === over.id)
-    if (!activeTask || !overTask) return
-    if (activeTask.status !== overTask.status) {
-      updateTask.mutate({ id: activeTask.taskId, status: overTask.status })
+    // over.id is either a column ID (dropped on empty column space)
+    // or a task ID (dropped on top of another task) — handle both
+    const isColumn = KANBAN_COLUMNS.some((c) => c.id === over.id)
+    const newStatus = isColumn
+      ? over.id
+      : tasks.find((t) => t.taskId === over.id)?.status
+
+    if (newStatus && task.status !== newStatus) {
+      updateTask.mutate({ id: task.taskId, status: newStatus })
     }
   }
 
@@ -58,7 +52,6 @@ export default function KanbanBoard({ tasks = [], onTaskClick, onAddTask }) {
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDragOver={handleDragOver}
     >
       <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-220px)]">
         {KANBAN_COLUMNS.map((column) => (

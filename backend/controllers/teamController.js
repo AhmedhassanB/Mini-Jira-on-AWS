@@ -35,14 +35,21 @@ export const createTeam = async (req, res) => {
 };
 
 // GET ALL TEAMS
+// Employees only receive their own team; managers and admins receive all teams
 export const getAllTeams = async (req, res) => {
   try {
-    const data = await dynamoDB.send(
-      new ScanCommand({
-        TableName: "Teams",
-      })
-    );
+    const role = req.user?.role ? String(req.user.role).toLowerCase() : null;
+    const isPrivileged = role === "manager" || role === "admin";
 
+    if (!isPrivileged) {
+      if (!req.user.teamId) return res.json([]);
+      const data = await dynamoDB.send(
+        new GetCommand({ TableName: "Teams", Key: { teamId: req.user.teamId } })
+      );
+      return res.json(data.Item ? [data.Item] : []);
+    }
+
+    const data = await dynamoDB.send(new ScanCommand({ TableName: "Teams" }));
     res.json(data.Items);
   } catch (error) {
     console.error(error);

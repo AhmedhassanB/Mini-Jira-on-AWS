@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Trash2, Calendar, User, Tag, Layers } from 'lucide-react'
+import { Pencil, Trash2, Calendar, User } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
@@ -11,13 +11,34 @@ import PriorityBadge from '@/components/common/PriorityBadge'
 import TaskComments from './TaskComments'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { useDeleteTask } from '@/hooks/useTasks'
+import { useTeams } from '@/hooks/useTeams'
+import { useProjects } from '@/hooks/useProjects'
+import { useUsers } from '@/hooks/useUsers'
+import { useAuthStore } from '@/store/authStore'
 import { formatDate } from '@/utils/helpers'
 
 export default function TaskModal({ task, open, onOpenChange, onEdit }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const deleteTask = useDeleteTask()
 
+  const { user } = useAuthStore()
+  const role = user?.role?.toLowerCase()
+  const isPrivileged = role === 'manager' || role === 'admin'
+
+  const { data: teams = [] } = useTeams()
+  const { data: projects = [] } = useProjects()
+  const { data: users = [] } = useUsers()
+
   if (!task) return null
+
+  const teamName = task.teamId ? (teams.find((t) => t.teamId === task.teamId)?.name || null) : null
+  const projectName = task.projectId ? (projects.find((p) => p.projectId === task.projectId)?.name || null) : null
+  const assignedByName = task.assigneeName ||
+    (task.assigneeId
+      ? (users.find((u) => u.userId === task.assigneeId)?.username ||
+         users.find((u) => u.userId === task.assigneeId)?.email ||
+         null)
+      : null)
 
   const handleDelete = () => {
     deleteTask.mutate(task.taskId, {
@@ -38,17 +59,21 @@ export default function TaskModal({ task, open, onOpenChange, onEdit }) {
                 {task.title}
               </DialogTitle>
               <div className="flex gap-1 shrink-0">
-                <Button variant="ghost" size="icon" onClick={() => onEdit?.(task)} className="h-8 w-8">
-                  <Pencil size={14} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setConfirmOpen(true)}
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                >
-                  <Trash2 size={14} />
-                </Button>
+                {isPrivileged && (
+                  <Button variant="ghost" size="icon" onClick={() => onEdit?.(task)} className="h-8 w-8">
+                    <Pencil size={14} />
+                  </Button>
+                )}
+                {isPrivileged && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setConfirmOpen(true)}
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                )}
               </div>
             </div>
           </DialogHeader>
@@ -58,8 +83,8 @@ export default function TaskModal({ task, open, onOpenChange, onEdit }) {
             <div className="flex flex-wrap gap-2">
               <StatusBadge status={task.status} />
               <PriorityBadge priority={task.priority} />
-              {task.teamId && <Badge variant="outline">Team: {task.teamId}</Badge>}
-              {task.projectId && <Badge variant="outline">Project: {task.projectId}</Badge>}
+              {teamName && <Badge variant="outline">Team: {teamName}</Badge>}
+              {projectName && <Badge variant="outline">Project: {projectName}</Badge>}
             </div>
 
             {/* Image */}
@@ -79,15 +104,13 @@ export default function TaskModal({ task, open, onOpenChange, onEdit }) {
 
             {/* Details grid */}
             <div className="grid grid-cols-2 gap-3">
-              {task.assignee && (
-                <div className="flex items-center gap-2 text-sm">
-                  <User size={14} className="text-muted-foreground shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Assignee</p>
-                    <p className="font-medium text-foreground">{task.assignee}</p>
-                  </div>
+              <div className="flex items-center gap-2 text-sm">
+                <User size={14} className="text-muted-foreground shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Assigned by</p>
+                  <p className="font-medium text-foreground">{assignedByName || '—'}</p>
                 </div>
-              )}
+              </div>
               {task.deadline && (
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar size={14} className="text-muted-foreground shrink-0" />

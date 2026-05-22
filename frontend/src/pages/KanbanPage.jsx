@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/common/PageHeader'
@@ -9,21 +9,41 @@ import CreateTaskModal from '@/components/tasks/CreateTaskModal'
 import TaskModal from '@/components/tasks/TaskModal'
 import TaskFilters from '@/components/tasks/TaskFilters'
 import { useTasks } from '@/hooks/useTasks'
+import { useUsers } from '@/hooks/useUsers'
 import { useAuthStore } from '@/store/authStore'
 import { filterTasks } from '@/utils/helpers'
 import { Kanban } from 'lucide-react'
 
 export default function KanbanPage() {
   const { user } = useAuthStore()
+  const role = user?.role?.toLowerCase()
+  const isEmployee = role !== 'manager' && role !== 'admin'
+
   const [createOpen, setCreateOpen] = useState(false)
   const [createStatus, setCreateStatus] = useState('To Do')
   const [selectedTask, setSelectedTask] = useState(null)
   const [editTask, setEditTask] = useState(null)
   const [filters, setFilters] = useState({ search: '', status: '', priority: '', teamId: '' })
 
-  const { data: tasks = [], isLoading } = useTasks(
-    user?.role === 'Employee' && user?.teamId ? { teamId: user.teamId } : {}
+  const { data: rawTasks = [], isLoading } = useTasks()
+  const { data: users = [] } = useUsers()
+
+  const userMap = useMemo(
+    () => Object.fromEntries(users.map((u) => [u.userId, u.username || u.email])),
+    [users]
   )
+
+  // Employees: client-side guard — only show tasks that belong to their team
+  // Enrich every task with a resolved assigneeName for display in TaskCard
+  const tasks = useMemo(() => {
+    const base = isEmployee && user?.teamId
+      ? rawTasks.filter((t) => t.teamId === user.teamId)
+      : rawTasks
+    return base.map((t) => ({
+      ...t,
+      assigneeName: t.assigneeId ? (userMap[t.assigneeId] || null) : null,
+    }))
+  }, [rawTasks, isEmployee, user?.teamId, userMap])
 
   const filteredTasks = filterTasks(tasks, filters)
   const hasActiveFilters = filters.search || filters.status || filters.priority || filters.teamId
@@ -47,11 +67,11 @@ export default function KanbanPage() {
       <PageHeader
         title="Kanban Board"
         description="Drag and drop tasks between columns to update their status."
-        action={
+        action={!isEmployee && (
           <Button onClick={() => { setCreateStatus('To Do'); setCreateOpen(true) }} size="sm">
             <Plus size={16} /> Add Task
           </Button>
-        }
+        )}
       />
 
       <div className="mb-4">
@@ -63,11 +83,11 @@ export default function KanbanPage() {
           icon={Kanban}
           title="No tasks yet"
           description="Create your first task to get started with the Kanban board."
-          action={
+          action={!isEmployee && (
             <Button onClick={() => setCreateOpen(true)}>
               <Plus size={16} /> Create Task
             </Button>
-          }
+          )}
         />
       ) : filteredTasks.length === 0 && hasActiveFilters ? (
         <EmptyState
@@ -84,7 +104,7 @@ export default function KanbanPage() {
         <KanbanBoard
           tasks={filteredTasks}
           onTaskClick={setSelectedTask}
-          onAddTask={handleAddTask}
+          onAddTask={isEmployee ? undefined : handleAddTask}
         />
       )}
 

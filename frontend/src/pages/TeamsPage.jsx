@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Users, Pencil, Trash2, Loader2, UserPlus } from 'lucide-react'
+import { Plus, Users, Pencil, Trash2, Loader2, UserPlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,7 @@ import EmptyState from '@/components/common/EmptyState'
 import ConfirmDialog from '@/components/common/ConfirmDialog'
 import { CardSkeleton } from '@/components/common/LoadingSkeleton'
 import { useTeams, useCreateTeam, useUpdateTeam, useDeleteTeam } from '@/hooks/useTeams'
-import { useUsers, useAssignUserToTeam } from '@/hooks/useUsers'
+import { useUsers, useAssignUserToTeam, useRemoveUserFromTeam } from '@/hooks/useUsers'
 import { useTasks } from '@/hooks/useTasks'
 import { useAuthStore } from '@/store/authStore'
 
@@ -125,11 +125,9 @@ function TeamModal({ open, onOpenChange, team }) {
 
 function TeamCard({ team, members = [], onEdit, onDelete, onAssignMember, isAdmin }) {
   const { data: tasks = [] } = useTasks({ teamId: team.teamId })
+  const removeMember = useRemoveUserFromTeam()
   const done = tasks.filter((t) => t.status === 'Done').length
   const inProgress = tasks.filter((t) => t.status === 'In Progress').length
-
-  const visibleMembers = members.slice(0, 4)
-  const extraCount = members.length - visibleMembers.length
 
   const getInitials = (name) =>
     (name || '?').split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
@@ -151,12 +149,16 @@ function TeamCard({ team, members = [], onEdit, onDelete, onAssignMember, isAdmi
                   <UserPlus size={13} />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(team)}>
-                <Pencil size={13} />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(team)}>
-                <Trash2 size={13} />
-              </Button>
+              {isAdmin && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(team)}>
+                  <Pencil size={13} />
+                </Button>
+              )}
+              {isAdmin && (
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => onDelete(team)}>
+                  <Trash2 size={13} />
+                </Button>
+              )}
             </div>
           </div>
           {team.description && (
@@ -170,24 +172,31 @@ function TeamCard({ team, members = [], onEdit, onDelete, onAssignMember, isAdmi
             {members.length === 0 ? (
               <p className="text-xs text-muted-foreground italic">No members yet</p>
             ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex -space-x-2">
-                  {visibleMembers.map((m) => (
-                    <Avatar key={m.userId} className="h-7 w-7 border-2 border-card" title={m.username || m.email}>
-                      <AvatarFallback className="text-[10px] bg-primary/20 text-primary">
-                        {getInitials(m.username || m.email)}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {visibleMembers.map((m) => (
-                    <span key={m.userId} className="text-xs text-foreground">{m.username || m.email}</span>
-                  ))}
-                  {extraCount > 0 && (
-                    <span className="text-xs text-muted-foreground">+{extraCount} more</span>
-                  )}
-                </div>
+              <div className="flex flex-col gap-1">
+                {members.map((m) => (
+                  <div key={m.userId} className="flex items-center justify-between gap-2 group/member">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6" title={m.username || m.email}>
+                        <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
+                          {getInitials(m.username || m.email)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs text-foreground">{m.username || m.email}</span>
+                    </div>
+                    {isAdmin && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-destructive opacity-0 group-hover/member:opacity-100 transition-opacity"
+                        title="Remove from team"
+                        disabled={removeMember.isPending}
+                        onClick={() => removeMember.mutate(m.userId)}
+                      >
+                        <X size={11} />
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -227,11 +236,11 @@ export default function TeamsPage() {
       <PageHeader
         title="Teams"
         description="Organize your workforce into teams."
-        action={
+        action={isAdmin && (
           <Button size="sm" onClick={() => { setEditTeam(null); setModalOpen(true) }}>
             <Plus size={16} /> New Team
           </Button>
-        }
+        )}
       />
 
       {isLoading ? (
@@ -243,7 +252,7 @@ export default function TeamsPage() {
           icon={Users}
           title="No teams yet"
           description="Create teams to organize members and filter tasks."
-          action={<Button onClick={() => setModalOpen(true)}><Plus size={16} /> Create Team</Button>}
+          action={isAdmin && <Button onClick={() => setModalOpen(true)}><Plus size={16} /> Create Team</Button>}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

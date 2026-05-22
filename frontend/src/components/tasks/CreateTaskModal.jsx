@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -12,6 +12,8 @@ import {
 import { useCreateTask, useUpdateTask } from '@/hooks/useTasks'
 import { useTeams } from '@/hooks/useTeams'
 import { useProjects } from '@/hooks/useProjects'
+import { useUsers } from '@/hooks/useUsers'
+import { useAuthStore } from '@/store/authStore'
 import { TASK_STATUSES, TASK_PRIORITIES } from '@/utils/constants'
 
 const DEFAULT_FORM = {
@@ -19,7 +21,7 @@ const DEFAULT_FORM = {
   description: '',
   status: 'To Do',
   priority: 'medium',
-  assignee: '',
+  assigneeId: '',
   deadline: '',
   teamId: '',
   projectId: '',
@@ -29,14 +31,22 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
   const isEdit = !!task
   const [form, setForm] = useState({ ...DEFAULT_FORM })
 
+  const { user } = useAuthStore()
+  const role = user?.role?.toLowerCase()
+  const isManager = role === 'manager' || role === 'admin'
+
   const { data: teams = [] } = useTeams()
   const { data: projects = [] } = useProjects()
+  const { data: users = [] } = useUsers()
   const createTask = useCreateTask()
   const updateTask = useUpdateTask()
 
-  // Re-populate the form whenever the dialog opens or the task being edited changes.
-  // useState only runs its initializer once on mount, so without this effect the form
-  // would stay empty every time the modal reopens with a different task.
+  // Members of the currently selected team
+  const teamMembers = useMemo(
+    () => form.teamId ? users.filter((u) => u.teamId === form.teamId) : [],
+    [users, form.teamId]
+  )
+
   useEffect(() => {
     if (open) {
       setForm(
@@ -45,7 +55,7 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
           description: task.description || '',
           status: task.status || 'To Do',
           priority: task.priority || 'medium',
-          assignee: task.assignee || '',
+          assigneeId: task.assigneeId || '',
           deadline: task.deadline ? task.deadline.slice(0, 10) : '',
           teamId: task.teamId || '',
           projectId: task.projectId || '',
@@ -56,25 +66,72 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
 
   const set = (key, val) => setForm((f) => ({ ...f, [key]: val }))
 
+  // Changing team clears the assignee since the member list changes
+  const setTeam = (val) => setForm((f) => ({ ...f, teamId: val, assigneeId: '' }))
+
   const handleSubmit = (e) => {
     e.preventDefault()
-    const payload = { ...form }
-    if (!payload.deadline) delete payload.deadline
-    if (!payload.teamId) delete payload.teamId
-    if (!payload.projectId) delete payload.projectId
-    if (!payload.assignee) delete payload.assignee
 
     if (isEdit) {
+      // Employees may only update status — send nothing else
+      const payload = isManager
+        ? (() => {
+            const p = { ...form }
+            if (!p.deadline) delete p.deadline
+            if (!p.teamId) delete p.teamId
+            if (!p.projectId) delete p.projectId
+            if (!p.assigneeId) delete p.assigneeId
+            return p
+          })()
+        : { status: form.status }
+
       updateTask.mutate(
         { id: task.taskId, ...payload },
         { onSuccess: () => onOpenChange(false) }
       )
     } else {
+      const payload = { ...form }
+      if (!payload.deadline) delete payload.deadline
+      if (!payload.teamId) delete payload.teamId
+      if (!payload.projectId) delete payload.projectId
+      if (!payload.assigneeId) delete payload.assigneeId
       createTask.mutate(payload, { onSuccess: () => { setForm(DEFAULT_FORM); onOpenChange(false) } })
     }
   }
 
   const isPending = createTask.isPending || updateTask.isPending
+
+  // Employees editing a task only see the status picker
+  if (isEdit && !isManager) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Update Status</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => set('status', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TASK_STATUSES.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Saving...' : 'Save Status'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -134,30 +191,8 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="assignee">Assignee</Label>
-              <Input
-                id="assignee"
-                value={form.assignee}
-                onChange={(e) => set('assignee', e.target.value)}
-                placeholder="Name or email"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="deadline">Deadline</Label>
-              <Input
-                id="deadline"
-                type="date"
-                value={form.deadline}
-                onChange={(e) => set('deadline', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
               <Label>Team</Label>
-              <Select value={form.teamId || 'none'} onValueChange={(v) => set('teamId', v === 'none' ? '' : v)}>
+              <Select value={form.teamId || 'none'} onValueChange={(v) => setTeam(v === 'none' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Select team" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No team</SelectItem>
@@ -176,6 +211,39 @@ export default function CreateTaskModal({ open, onOpenChange, initialStatus, tas
                   <SelectItem value="none">No project</SelectItem>
                   {projects.map((p) => (
                     <SelectItem key={p.projectId} value={p.projectId}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="deadline">Deadline</Label>
+              <Input
+                id="deadline"
+                type="date"
+                value={form.deadline}
+                onChange={(e) => set('deadline', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Assignee</Label>
+              <Select
+                value={form.assigneeId || 'none'}
+                onValueChange={(v) => set('assigneeId', v === 'none' ? '' : v)}
+                disabled={!form.teamId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={form.teamId ? 'Select assignee' : 'Select a team first'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {teamMembers.map((u) => (
+                    <SelectItem key={u.userId} value={u.userId}>
+                      {u.username || u.email}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
