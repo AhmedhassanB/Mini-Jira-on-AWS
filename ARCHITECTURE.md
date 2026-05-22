@@ -2,6 +2,12 @@
 
 ## Architecture Diagram
 
+![Architecture Diagram](architecture-diagram.svg)
+
+---
+
+## Detailed Flow Diagram (Mermaid)
+
 ```mermaid
 flowchart TB
     User(["👤 User / Browser"])
