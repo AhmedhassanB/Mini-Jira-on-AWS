@@ -44,7 +44,7 @@ function ActivityItem({ task, teamName, assigneeName, index }) {
           <p className="text-xs text-muted-foreground mt-1.5 line-clamp-1">{task.description}</p>
         )}
         <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-          {assigneeName && <span>Assigned to {assigneeName}</span>}
+          {assigneeName && <span>Assigned by {assigneeName}</span>}
           {teamName && <Badge variant="outline" className="text-[10px] py-0">{teamName}</Badge>}
         </div>
       </div>
@@ -102,7 +102,7 @@ export default function ActivityLogPage() {
               task={task}
               index={i}
               teamName={task.teamId ? teamMap[task.teamId] : null}
-              assigneeName={task.assigneeId ? userMap[task.assigneeId] : null}
+              assigneeName={task.assigneeName || (task.assigneeId ? userMap[task.assigneeId] : null)}
             />
           ))}
         </div>
