@@ -10,11 +10,6 @@ A lightweight, multi-team task-management web application (a stripped-down Jira/
 ## Live Demo
 
 **Application (CloudFront):** https://d26he9mvtyemga.cloudfront.net
-
-**Demo Video:** _<add link here — e.g. YouTube/Drive>_
-
-> The CloudFront link opens the live website directly, no configuration needed.
-
 ---
 
 ## Demo Scenario (works without code changes)
@@ -158,17 +153,7 @@ Alarm: `HighTaskCreationAlarm` publishes to an SNS topic when the threshold is e
 
 ---
 
-## DynamoDB Tables
 
-| Table | Key / Indexes |
-|-------|---------------|
-| Users | PK: `userId` |
-| Teams | PK: `teamId` |
-| Projects | PK: `projectId` |
-| Tasks | PK: `taskId`; **GSI** on `teamId`; **GSI** on `assigneeId` |
-| Comments | PK: `commentId`; sort/filter by `taskId` |
-
----
 
 ## Local Setup
 
