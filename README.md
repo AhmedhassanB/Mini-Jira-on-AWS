@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/banner.svg" alt="Mini-Jira on AWS" width="100%"/>
+</p>
+
 # Mini-Jira on AWS
 
 A lightweight, multi-team task-management web application (a stripped-down Jira/Trello) running entirely on AWS. The system supports multiple teams within a company, role-based access, server-side team isolation, an event-driven assignment pipeline, a Lambda image-resize pipeline, scheduled digest emails, and full CloudWatch monitoring — deployed across two Availability Zones behind an Application Load Balancer and CloudFront.
@@ -5,9 +9,7 @@ A lightweight, multi-team task-management web application (a stripped-down Jira/
 **Course:** Software Cloud Computing 2026 — Dr. John Zaki
 **Deadline:** 22/5/2026
 
----
 
-## Live Demo
 
 **Application (CloudFront):** https://d26he9mvtyemga.cloudfront.net
 ---
@@ -197,4 +199,3 @@ git pull
 npm run build
 pm2 restart mini-jira
 ```
-
